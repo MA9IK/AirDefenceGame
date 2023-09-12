@@ -1,15 +1,17 @@
-import * as THREE from '../node_modules/three/build/three.module.js';
+import * as THREE from 'three';
 import * as dat from './node_modules/dat.gui/build/dat.gui.module.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
-// Define variables and parameters
 const params = {
   color: '#ccc'
 };
 const bullets = [];
 const mouse = new THREE.Vector2();
-// const rotationSpeed = 0.005;
 
-let camera, scene, renderer, cube;
+let camera;
+let scene;
+let renderer;
+let fbxModel;
 
 init();
 
@@ -34,23 +36,27 @@ function init() {
 
   // Create GUI for changing the scene background color
   const gui = new dat.GUI();
-  gui.addColor(params, 'color').onChange(function (value) {
+  gui.addColor(params, 'color').onChange(value => {
     scene.background.set(value);
   });
 
   // Hide the default cursor and add the custom crosshair
   document.body.style.cursor = 'none';
-  const crosshair = document.getElementById('crosshair');
 
-  // Create a cube
-  const geometry = new THREE.BoxGeometry(0.2, 1, 1);
-  const material = new THREE.MeshBasicMaterial({ color: '#ff0000' });
-  cube = new THREE.Mesh(geometry, material);
-  scene.add(cube);
+  const loader = new FBXLoader();
+
+  loader.load('./public/turret.fbx', fbx => {
+    fbxModel = fbx;
+
+    fbxModel.scale.set(0.01, 0.01, 0.01);
+
+    fbxModel.position.set(0, 0, -2);
+    scene.add(fbx);
+  });
 
   // Set camera position
-  camera.position.z = 2;
-  camera.position.y = 1;
+  camera.position.set(0, 1, -3);
+  camera.lookAt(0, 1, 0);
 
   // Add mouse move event listener
   renderer.domElement.addEventListener('mousemove', onMouseMove);
@@ -76,7 +82,6 @@ function init() {
         scene.remove(bullet);
         bullets.splice(index, 1);
       }
-      console.log(bullets);
     });
   }
 
@@ -89,14 +94,13 @@ function shootBullet(event) {
     new THREE.MeshBasicMaterial({ color: '#ff0000' })
   );
 
-  // Set the bullet's initial position at the cube's position
-  bullet.position.copy(cube.position.clone());
+  bullet.position.copy(fbxModel.position.clone());
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
   const mouseDirection = new THREE.Vector3(
     mouse.x / 2,
     mouse.y / 2,
-    -cube.position.z
+    -fbxModel.position.z
   );
 
   // Normalize the direction vector to ensure constant bullet speed
@@ -117,12 +121,16 @@ function onMouseMove(event) {
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-  const crosshairX = event.clientX - crosshair.width / 2 + 'px';
-  const crosshairY = event.clientY - crosshair.height / 2 + 'px';
+  const crosshairX = `${event.clientX - crosshair.width / 2}px`;
+  const crosshairY = `${event.clientY - crosshair.height / 2}px`;
 
   crosshair.style.left = crosshairX;
   crosshair.style.top = crosshairY;
 
-  const target = new THREE.Vector3(mouse.x, mouse.y, -camera.position.z);
-  cube.lookAt(target);
+  const mousePosition = new THREE.Vector3(mouse.x, mouse.y, -1);
+  mousePosition.unproject(camera);
+
+  const direction = mousePosition.sub(camera.position).normalize();
+
+  fbxModel.lookAt(fbxModel.position.clone().add(direction));
 }
