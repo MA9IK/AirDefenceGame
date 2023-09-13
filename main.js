@@ -1,19 +1,25 @@
 import * as THREE from 'three';
-import * as dat from './node_modules/dat.gui/build/dat.gui.module.js';
+// import * as dat from './node_modules/dat.gui/build/dat.gui.module.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
 const params = {
   color: '#ccc'
 };
-const bullets = [];
 const mouse = new THREE.Vector2();
 
 let camera;
 let scene;
 let renderer;
-let fbxModel;
+let fbxModels = [];
+let bullets = [];
 
 init();
+
+
+loadAndAddTurret('./public/turret.fbx', new THREE.Vector3(1, -2, 2));
+loadAndAddTurret('./public/turret.fbx', new THREE.Vector3(3, -2, 2));
+
+animate();
 
 function init() {
   // Create the camera
@@ -34,87 +40,87 @@ function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
-  // Create GUI for changing the scene background color
-  const gui = new dat.GUI();
-  gui.addColor(params, 'color').onChange(value => {
-    scene.background.set(value);
-  });
-
   // Hide the default cursor and add the custom crosshair
   document.body.style.cursor = 'none';
 
-  const loader = new FBXLoader();
 
-  loader.load('./public/turret.fbx', fbx => {
-    fbxModel = fbx;
-
-    fbxModel.scale.set(0.01, 0.01, 0.01);
-
-    fbxModel.position.set(0, 0, -2);
-    scene.add(fbx);
-  });
-
-  // Set camera position
   camera.position.set(0, 1, -3);
   camera.lookAt(0, 1, 0);
 
   // Add mouse move event listener
   renderer.domElement.addEventListener('mousemove', onMouseMove);
-  renderer.domElement.addEventListener('click', shootBullet);
-
-  // Animation function
-  // Inside the animate() function, update the bullets
-  function animate() {
-    requestAnimationFrame(animate);
-    renderer.render(scene, camera);
-
-    // Move and check for out-of-scene bullets
-    bullets.forEach((bullet, index) => {
-      bullet.position.add(bullet.velocity);
-
-      // Remove the bullet if it goes out of the scene
-      if (
-        bullet.position.x < window.innerWidth / -2 ||
-        bullet.position.x > window.innerWidth / 2 ||
-        bullet.position.y < window.innerHeight / -2 ||
-        bullet.position.y > window.innerHeight / 2
-      ) {
-        scene.remove(bullet);
-        bullets.splice(index, 1);
-      }
-    });
-  }
-
-  animate();
+  renderer.domElement.addEventListener('click', fire)
 }
 
-function shootBullet(event) {
-  const bullet = new THREE.Mesh(
-    new THREE.SphereGeometry(0.05, 16, 16), // Adjust the size of the bullet
-    new THREE.MeshBasicMaterial({ color: '#ff0000' })
-  );
+function loadAndAddTurret(modelPath, position) {
+  const loader = new FBXLoader();
 
-  bullet.position.copy(fbxModel.position.clone());
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-  const mouseDirection = new THREE.Vector3(
-    mouse.x / 2,
-    mouse.y / 2,
-    -fbxModel.position.z
-  );
+  loader.load(modelPath, fbx => {
+    // Clone the model for each turret instance
+    const clonedFbx = fbx.clone();
 
-  // Normalize the direction vector to ensure constant bullet speed
-  mouseDirection.normalize();
+    fbxModels.push(clonedFbx)
+    
+    // Apply scaling and position to the cloned model
+    clonedFbx.scale.set(0.005, 0.005, 0.005);
+    clonedFbx.position.copy(position);
+    
+    // Add the cloned turret model to the scene
+    scene.add(clonedFbx);
+  });
+}
 
-  // Set the bullet's initial velocity (you can adjust this value for speed)
-  const bulletSpeed = 0.02; // Adjust the bullet speed
-  bullet.velocity = mouseDirection.multiplyScalar(bulletSpeed);
+// function fire(event) {
+//   const bullet = new THREE.Mesh(
+//     new THREE.SphereGeometry(0.05, 16, 16), // adjust size
+//     new THREE.MeshBasicMaterial({ color: '#ff0000' })
+//   )
+//   let mouseDirection;
+//   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+//   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-  scene.add(bullet);
+//   fbxModels.forEach(item => {
+//     bullet.position.copy(item.position.clone())
 
-  // Update bullet position in the animation loop
-  bullets.push(bullet); // Store bullets in an array for updating
-  scene.add(bullet);
+//     mouseDirection = new THREE.Vector3(
+//       -mouse.x,
+//       mouse.y,
+//       item.position.z
+//     );
+//   })
+//   mouseDirection.normalize()
+
+//   const bulletSpeed = 0.02
+
+//   bullet.velocity = mouseDirection.multiplyScalar(bulletSpeed)
+
+//   bullets.push(bullet)
+//   scene.add(bullet)
+// }
+
+function fire(event) {
+  fbxModels.forEach(item => {
+    const bullet = new THREE.Mesh(
+      new THREE.SphereGeometry(0.05, 16, 16), // adjust size
+      new THREE.MeshBasicMaterial({ color: '#ff0000' })
+    );
+
+    const mouseDirection = new THREE.Vector3(
+      (event.clientX / window.innerWidth) * 2 - 1,
+      -(event.clientY / window.innerHeight) * 2 + 1,
+      -item.position.z
+    );
+    
+    mouseDirection.unproject(camera);
+    mouseDirection.sub(camera.position).normalize();
+    
+    const bulletSpeed = 0.02;
+    bullet.velocity = mouseDirection.multiplyScalar(bulletSpeed);
+    
+    bullet.position.copy(item.position.clone());
+    bullets.push(bullet);
+    scene.add(bullet);
+  });
 }
 
 function onMouseMove(event) {
@@ -132,5 +138,18 @@ function onMouseMove(event) {
 
   const direction = mousePosition.sub(camera.position).normalize();
 
-  fbxModel.lookAt(fbxModel.position.clone().add(direction));
+  fbxModels.forEach(item => {
+    // Calculate the rotation to look at the direction
+    item.lookAt(item.position.clone().add(direction));
+  });
 }
+
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+
+  bullets.forEach(item => {
+    item.position.add(item.velocity)
+  })
+}
+
