@@ -1,11 +1,16 @@
 * {
   margin: 0;
 }
+
+*::-webkit-scrollbar {
+  display: none;
+}
+
 #canvasColor {
   z-index: 998;
   opacity: 1;
   background: red;
-}
+} 
 
 #crosshair {
   position: absolute;

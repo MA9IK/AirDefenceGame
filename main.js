@@ -102,12 +102,15 @@ function enemy() {
 }
 
 function fire(event) {
-  if (!autocontrol) return
+  if (!autocontrol) return;
   fbxModels.forEach(item => {
+    // Змініть геометрію кульки на продовжену форму (наприклад, циліндр)
     const bullet = new THREE.Mesh(
-      new THREE.SphereGeometry(0.1, 16, 16),
-      new THREE.MeshBasicMaterial({ color: '#ff0000' })
+      new THREE.CylinderGeometry(0.05, 0.05, 0.5, 16), // Змініть розміри та геометрію
+      new THREE.MeshLambertMaterial({ emissive: '#ff0000', emissiveIntensity: 14 }) // Додайте підсвічування
     );
+
+    bullet.rotation.x = Math.PI / 2.2;
 
     const bulletPosition = new THREE.Vector3(0, 0, -1)
       .applyQuaternion(item.quaternion)
@@ -123,13 +126,14 @@ function fire(event) {
     mouseDirection.unproject(camera);
     mouseDirection.sub(camera.position).normalize();
 
-    const bulletSpeed = 2;
+    const bulletSpeed = 0.1;
     bullet.velocity = mouseDirection.clone().multiplyScalar(bulletSpeed);
 
     bullets.push(bullet);
     scene.add(bullet);
   });
 }
+
 
 function ui() {
   const gui = new dat.GUI();
