@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import * as dat from './node_modules/dat.gui/build/dat.gui.module.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as CANNON from './node_modules/cannon-es/dist/cannon-es.js';
 
 const params = {
   color: '#ccc'
@@ -11,38 +13,69 @@ const mouse = new THREE.Vector2();
 let camera;
 let scene;
 let renderer;
-let autocontrol = true;
-let shootCooldown = 2;
-let prevEnemyAngle = 0;
-let maxTargetDistance = 20;
+const maxTargetDistance = 20;
 let distanceTurret;
 let isPageActive = true;
 let changeTypeBullets;
+let changeTurretTypes;
+const bullets = [];
+const groundMeshes = [];
+const turretRotationAngles = [];
 const BulletTypes = {
   STANDARD: 'Standard',
   HOMING: 'Homing'
 };
+const turretTypes = {
+  STANDARD: 'Standard',
+  HOMING: 'Homing'
+};
+
+let currentBullet = BulletTypes.STANDARD;
+
+const enemies = [];
 
 let currentBulletType = BulletTypes.STANDARD;
 const fbxModels = [];
-const bullets = [];
-const enemies = [];
+const turrets = [];
+const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
 
 init();
+ground();
+sun();
+loadAndAddTurret(
+  './public/turret.fbx',
+  new THREE.Vector3(3, -1, 2),
+  turretTypes.STANDARD,
+  0.005
+); // Перше значення (3) - x-координата, друге (1) - y-координата (нижче підлоги), третє (2) - z-координата
+loadAndAddTurret(
+  './public/turret.fbx',
+  new THREE.Vector3(-3, -1, 2),
+  turretTypes.HOMING,
+  0.005
+); // Перше значення (-3) - x-координата, друге (1) - y-координата (нижче підлоги), третє (2) - z-координата
+setInterval(() => {
+  const spawnX = 20;
+  const spawnY = Math.random() * 12 - -1;
+  const enemyZ = 10;
+  const position = new CANNON.Vec3(spawnX, spawnY, enemyZ);
+  createEnemy(position); // Передача позиції цілі
+}, 1000);
 
-loadAndAddTurret('./public/turret.fbx', new THREE.Vector3(3, -2, 2));
-loadAndAddTurret('./public/turret.fbx', new THREE.Vector3(-3, -2, 2));
+// loadGround('./public/ground.fbx', new THREE.Vector3(0, 0, 10), 0.01);
 
 animate();
 
-setInterval(enemy, 3000);
+// Sets a 12 by 12 gird helper
+const gridHelper = new THREE.GridHelper(12, 12);
+scene.add(gridHelper);
+
+// Sets the x, y, and z axes with each having a length of 4
+const axesHelper = new THREE.AxesHelper(4);
+scene.add(axesHelper);
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    isPageActive = false;
-  } else {
-    isPageActive = true;
-  }
+  isPageActive = document.visibilityState === 'hidden' ? false : true;
 });
 
 ui();
@@ -51,15 +84,14 @@ function init() {
   camera = new THREE.PerspectiveCamera(
     70,
     window.innerWidth / window.innerHeight,
-    0.01,
-    100
+    0.1,
+    1000
   );
-  camera.position.z = 1;
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(params.color);
 
-  renderer = new THREE.WebGLRenderer();
+  renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
@@ -69,22 +101,6 @@ function init() {
   camera.lookAt(0, 1, 0);
 
   renderer.domElement.addEventListener('mousemove', onMouseMove);
-  renderer.domElement.addEventListener('click', fire);
-}
-
-function loadAndAddTurret(modelPath, position) {
-  const loader = new FBXLoader();
-
-  loader.load(modelPath, fbx => {
-    const clonedFbx = fbx.clone();
-
-    fbxModels.push(clonedFbx);
-
-    clonedFbx.scale.set(0.005, 0.005, 0.005);
-    clonedFbx.position.copy(position);
-
-    scene.add(clonedFbx);
-  });
 }
 
 function toggleBulletType() {
@@ -93,91 +109,94 @@ function toggleBulletType() {
       ? BulletTypes.HOMING
       : BulletTypes.STANDARD;
 
+  // Оновлюємо текст кнопки
+  changeTurretTypes.textContent = `Turret type - ${currentBulletType}`;
+  currentBullet = currentBulletType;
   changeTypeBullets.textContent = `Now type bullets - ${currentBulletType}`;
 }
 
-function enemy() {
-  if (!isPageActive) return;
-  const spawnX = 20;
-  const spawnY = Math.random() * 12 - -1;
-  const enemyZ = 20;
-
-  const enemy = new THREE.Mesh(
-    new THREE.SphereGeometry(0.1, 16, 16),
-    new THREE.MeshBasicMaterial({ color: '#ff0000' })
+function ground() {
+  const groundShape = new CANNON.Plane();
+  const groundBody = new CANNON.Body({ mass: 0, shape: groundShape });
+  groundBody.quaternion.setFromAxisAngle(
+    new CANNON.Vec3(14, 0, 0),
+    -Math.PI / 2
   );
-  enemy.scale.set(3, 3, 3);
+  groundBody.position.y = -1.6;
+  groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+  world.addBody(groundBody);
 
-  enemy.position.set(spawnX, spawnY, enemyZ);
-
-  const enemySpeed = 0.03;
-  enemy.velocity = new THREE.Vector3(-enemySpeed, 0, 0);
-
-  enemies.push(enemy);
-  scene.add(enemy);
+  const loader = new FBXLoader();
+  loader.load('./public/ground.fbx', fbx => {
+    fbx.scale.set(1, 1, 1); // Масштаб моделі за потребою
+    fbx.rotation.set(0, 20.4, 0);
+    fbx.position.set(0, -1.5, 500);
+    scene.add(fbx);
+  });
 }
 
-// function fire(event) {
-//   if (!autocontrol) return;
-//   fbxModels.forEach(item => {
-//     const bullet = new THREE.Mesh(
-//       new THREE.SphereGeometry(0.1, 16, 16),
-//       new THREE.MeshBasicMaterial({ color: '#ff0000' })
-//     );
+function loadAndAddTurret(modelPath, position, type, scale) {
+  const loader = new FBXLoader();
 
-//     const bulletPosition = new THREE.Vector3(0, 0, -1)
-//       .applyQuaternion(item.quaternion)
-//       .add(item.position);
-//     bullet.position.copy(bulletPosition);
+  loader.load(modelPath, fbx => {
+    const clonedFbx = fbx.clone();
 
-//     const direction = new THREE.Vector3(
-//       (event.clientX / window.innerWidth) * 2 - 1,
-//       -(event.clientY / window.innerHeight) * 2 + 1,
-//       -item.position.z
-//     );
+    fbxModels.push(clonedFbx);
 
-//     direction.unproject(camera);
-//     direction.sub(camera.position).normalize();
+    clonedFbx.scale.set(scale, scale, scale);
+    clonedFbx.position.copy(position);
 
-//     const bulletSpeed = 0.5;
-//     bullet.velocity = direction.clone().multiplyScalar(bulletSpeed);
+    // Створюємо форму для турелі у Cannon.js
+    const turret = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5));
 
-//     bullets.push(bullet);
-//     scene.add(bullet);
-//   });
-// }
+    // Створюємо тіло Cannon.js для турелі та встановлюємо його початкову позицію
+    const cannonTurretBody = new CANNON.Body({
+      mass: 400, // Змініть масу за потребою
+      shape: turret,
+      position: new CANNON.Vec3(position.x, position.y, position.z)
+    });
 
-function fire(event) {
-  if (!autocontrol) return;
-  fbxModels.forEach(item => {
-    let bullet;
+    cannonTurretBody.position.copy(position);
 
-    if (currentBulletType === BulletTypes.STANDARD) {
-      bullet = createStandardBullet(item, event);
-    } else if (currentBulletType === BulletTypes.HOMING) {
-      bullet = createHomingBullet(item);
-    }
+    // Додаємо тіло турелі до світу Cannon.js
+    world.addBody(cannonTurretBody);
+    scene.add(clonedFbx);
 
-    if (bullet) {
-      bullets.push(bullet);
-      scene.add(bullet);
-    }
+    // Додаємо посилання на тіло турелі для оновлення в анімації
+    turrets.push({ body: cannonTurretBody, type });
   });
+}
+
+function sun() {
+  const sunGeometry = new THREE.SphereGeometry(1, 32, 32);
+  const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Жовтий колір
+  const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
+
+  sunMesh.position.set(0, 50, -20); // Приклад позиції сонця
+  scene.add(sunMesh);
+
+  const sunlight = new THREE.DirectionalLight(0xffffff, 1); // Біле світло з інтенсивністю 1
+  sunlight.position.copy(sunMesh.position); // Позиція світла співпадає з позицією сонця
+  scene.add(sunlight);
+
+  sunlight.color.set('#fff'); // Змініть колір світла
+  sunlight.intensity = 2; // Змініть інтенсивність світла
+
+  // sunlight.castShadow = true; // Увімкнути генерацію тіней від сонця
+
+  // Налаштування параметрів тіней для об'єктів, які кидають тіні
+  sunlight.shadow.mapSize.width = 1024;
+  sunlight.shadow.mapSize.height = 1024;
 }
 
 function ui() {
   const gui = new dat.GUI();
 
-  const customButton = document.createElement('button');
-  customButton.textContent = 'Enable autocontrol';
-  customButton.addEventListener('click', function () {
-    autocontrol = !autocontrol;
-    customButton.textContent = autocontrol
-      ? 'Enable autocontrol'
-      : 'Disable autocontrol';
-  });
+  changeTurretTypes = document.createElement('button');
+  changeTurretTypes.textContent = `Turret type - ${currentBulletType}`;
+  changeTurretTypes.addEventListener('click', toggleBulletType);
 
-  customButton.style = `
+  changeTurretTypes.style = `
   color: white;
     background-color: blue;
     border: none;
@@ -206,66 +225,13 @@ function ui() {
   changeTypeBullets.addEventListener('click', toggleBulletType);
 
   gui.domElement.appendChild(changeTypeBullets);
-  gui.domElement.appendChild(customButton);
+  gui.domElement.appendChild(changeTurretTypes);
   gui.domElement.appendChild(distanceTurret);
 
   const closeControlsButton = gui.domElement.querySelector('.close-button');
   if (closeControlsButton) {
     closeControlsButton.style.display = 'none';
   }
-}
-
-function createHomingBullet(turret) {
-  const bullet = new THREE.Mesh(
-    new THREE.SphereGeometry(0.1, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 'blue' }) // You can change the color for homing bullets
-  );
-
-  // Calculate the direction towards the nearest enemy
-  const target = findTargetInRange(turret.position);
-
-  if (target) {
-    const direction = new THREE.Vector3()
-      .subVectors(target.position, turret.position)
-      .normalize();
-
-    bullet.velocity = direction.clone().multiplyScalar(0.5); // Adjust the speed for homing bullets
-    bullet.position.copy(turret.position.clone());
-
-    // Store the target enemy for homing behavior
-    bullet.targetEnemy = target;
-
-    return bullet;
-  } else {
-    return null; // No target in range, don't create the bullet
-  }
-}
-
-function createStandardBullet(turret, event) {
-  const bullet = new THREE.Mesh(
-    new THREE.SphereGeometry(0.1, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 'red' })
-  );
-
-  const bulletPosition = new THREE.Vector3(0, 0, -1)
-    .applyQuaternion(turret.quaternion)
-    .add(turret.position);
-  bullet.position.copy(bulletPosition);
-
-  const direction = new THREE.Vector3(
-    (event.clientX / window.innerWidth) * 2 - 1,
-    -(event.clientY / window.innerHeight) * 2 + 1,
-    -turret.position.z
-  );
-
-  direction.unproject(camera);
-  direction.sub(camera.position).normalize();
-
-  const bulletSpeed = 0.5;
-  bullet.velocity = direction.clone().multiplyScalar(bulletSpeed);
-
-  bullets.push(bullet);
-  scene.add(bullet);
 }
 
 function onMouseMove(event) {
@@ -277,132 +243,121 @@ function onMouseMove(event) {
 
   crosshair.style.left = crosshairX;
   crosshair.style.top = crosshairY;
+}
 
-  if (autocontrol) {
+function createEnemy(position) {
+  const targetShape = new CANNON.Sphere(0.1); // Сфера радіус 1
+  const targetBody = new CANNON.Body({
+    mass: 200, // Реальна вага БПЛА (в кг)
+    shape: targetShape,
+    position
+  });
+
+  // Сила яка компенсує гравітацію
+  // targetBody.applyForce(new CANNON.Vec3(-1, 0, 0), targetBody.position);
+
+  world.addBody(targetBody);
+
+  const targetGeometry = new THREE.SphereGeometry(0.1, 16, 16); // Graphics geometry of the enemy
+  const targetMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Color of the enemy
+  const targetMesh = new THREE.Mesh(targetGeometry, targetMaterial);
+  scene.add(targetMesh);
+  // targetMesh.velocity = new THREE.Vector3(-10, 0, 0);
+
+  targetBody.velocity = new CANNON.Vec3(-10, 0, 0);
+  targetMesh.position.copy(position);
+
+  targetBody.addEventListener('collide', function (event) {
+    console.log('Enemy collided with something!');
+  });
+
+  enemies.push({ body: targetBody, mesh: targetMesh });
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function updateTargetPosition() {
+  enemies.forEach(enemy => {
+    const targetSpeed = 0.04;
+    const enemyBody = enemy.body;
+
+    // Отримати поточну позицію цілі
+    const currentPosition = enemyBody.position;
+
+    // Визначити напрямок руху цілі (наприклад, прямо вперед)
+    const forwardDirection = new CANNON.Vec3(-100, 0, 0); // Змініть напрямок за потребою
+
+    // Множимо напрямок на швидкість цілі, щоб отримати вектор швидкості
+    const velocity = forwardDirection.scale(targetSpeed);
+
+    // Застосовуємо вектор швидкості до цілі
+    enemyBody.velocity.copy(velocity);
+
+    // Оновіть позицію меша відповідно до тіла фізики ворога
+    enemy.mesh.position.copy(currentPosition);
+  });
+}
+
+window.addEventListener('resize', onWindowResize);
+function animate() {
+  requestAnimationFrame(animate);
+
+  // Оновлення турелей та їх фізичних об'єктів
+  fbxModels.forEach((item, index) => {
+    const turretInfo = turrets[index];
+
+    const cannonTurretBody = turretInfo.body;
+
+    // Оновити фізичну модель турелі
+    item.position.copy(cannonTurretBody.position);
+    item.quaternion.copy(cannonTurretBody.quaternion);
+
     const mousePosition = new THREE.Vector3(mouse.x, mouse.y, -1);
     mousePosition.unproject(camera);
     const direction = mousePosition.sub(camera.position).normalize();
 
-    fbxModels.forEach(item => {
-      const rotationSpeed = 0.1;
+    const angleToMouse = Math.atan2(direction.x, direction.z);
 
-      const angleToMouse = Math.atan2(direction.x, direction.z);
+    // Здійснюємо згладжування кута повороту
+    const smoothingFactor = 0.1; // Задайте значення згладжування
+    turretRotationAngles[index] = turretRotationAngles[index] || angleToMouse;
+    turretRotationAngles[index] +=
+      (angleToMouse - turretRotationAngles[index]) * smoothingFactor;
 
-      let angleDiff = angleToMouse - item.rotation.y;
-
-      if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-      if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-
-      item.rotation.y += angleDiff * rotationSpeed;
-    });
-  }
-}
-
-function removeEnemy(enemy) {
-  const index = enemies.indexOf(enemy);
-  if (index !== -1) {
-    maxTargetDistance += 0.5;
-    distanceTurret.textContent = `Current turret distance - ${maxTargetDistance}`;
-    scene.remove(enemy);
-    enemies.splice(index, 1);
-  }
-}
-
-function updateTurrets() {
-  fbxModels.forEach(turret => {
-    if (!autocontrol) {
-      const target = findTargetInRange(turret.position);
-
-      if (target) {
-        const direction = new THREE.Vector3()
-          .subVectors(target.position, turret.position)
-          .normalize();
-
-        const currentEnemyAngle = Math.atan2(direction.x, direction.z);
-
-        const smoothAngle =
-          prevEnemyAngle + 0.2 * (currentEnemyAngle - prevEnemyAngle);
-
-        turret.lookAt(
-          turret.position
-            .clone()
-            .add(
-              new THREE.Vector3(Math.sin(smoothAngle), 0, Math.cos(smoothAngle))
-            )
-        );
-
-        prevEnemyAngle = smoothAngle;
-      }
+    if (turretInfo.type === currentBullet) {
+      turretRotationAngles[index] +=
+        (angleToMouse - turretRotationAngles[index]) * smoothingFactor;
+      item.rotation.y = turretRotationAngles[index];
+    } else {
+      const angleToZero = 0;
+      const angleDiff = angleToZero - turretRotationAngles[index];
+      turretRotationAngles[index] += angleDiff * smoothingFactor;
     }
   });
-}
 
-function animate() {
-  requestAnimationFrame(animate);
+  // Оновлення фізики у світі Cannon.js
+  updateTargetPosition();
 
-  updateTurrets();
+  // Оновлення позицій ворогів
+  enemies.forEach(enemy => {
+    const enemyBody = enemy.body;
+    const enemyMesh = enemy.mesh;
+
+    // Оновіть позицію меша відповідно до тіла фізики ворога
+    enemyMesh.position.copy(enemyBody.position);
+    enemyMesh.quaternion.copy(enemyBody.quaternion);
+  });
+
+  groundMeshes.forEach(groundMesh => {
+    groundMesh.position.copy(new THREE.Vector3(0, -1.55, 0)); // Оновіть позицію підлоги
+  });
+
+  world.fixedStep();
 
   renderer.render(scene, camera);
-
-  shootCooldown -= 1 / 60;
-
-  if (!autocontrol && shootCooldown <= 0) {
-    fbxModels.forEach(turret => {
-      const target = findTargetInRange(turret.position);
-
-      if (target) {
-        const direction = new THREE.Vector3()
-          .subVectors(target.position, turret.position)
-          .normalize();
-
-        const bullet = new THREE.Mesh(
-          new THREE.SphereGeometry(0.1, 16, 16),
-          new THREE.MeshBasicMaterial({ color: '#ff0000' })
-        );
-
-        bullet.velocity = direction.clone().multiplyScalar(2);
-        bullet.position.copy(turret.position.clone());
-        bullets.push(bullet);
-        scene.add(bullet);
-
-        shootCooldown = 3;
-      }
-    });
-  }
-
-  bullets.forEach((bullet, bulletIndex) => {
-    bullet.position.add(bullet.velocity);
-
-    if (bullet.targetEnemy) {
-      const direction = new THREE.Vector3()
-        .subVectors(bullet.targetEnemy.position, bullet.position)
-        .normalize();
-
-      bullet.velocity.copy(direction.clone().multiplyScalar(0.5)); // Adjust the homing behavior speed here
-    }
-
-    enemies.forEach((enemy, enemyIndex) => {
-      const distance = bullet.position.distanceTo(enemy.position);
-
-      if (distance < 1) {
-        scene.remove(bullet);
-        bullets.splice(bulletIndex, 1);
-        removeEnemy(enemy);
-      }
-    });
-  });
-
-  enemies.forEach(enemy => {
-    enemy.position.add(enemy.velocity);
-  });
-}
-
-function findTargetInRange(turretPosition) {
-  for (const enemy of enemies) {
-    const distance = enemy.position.distanceTo(turretPosition);
-    if (distance <= maxTargetDistance) {
-      return enemy;
-    }
-  }
-  return null;
 }

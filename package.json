@@ -3,6 +3,8 @@
     "dat.gui": "^0.7.9"
   },
   "dependencies": {
-    "three": "^0.156.1"
+    "cannon-es": "^0.20.0",
+    "three": "^0.156.1",
+    "tween.js": "^16.6.0"
   }
 }
