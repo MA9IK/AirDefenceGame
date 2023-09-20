@@ -1,16 +1,20 @@
 export default function toggleBulletType(
   currentBulletType,
+  BulletTypes,
   changeTurretTypes,
   changeTypeBullets,
-  BulletTypes
+  currentBullet
 ) {
   currentBulletType =
     currentBulletType === BulletTypes.STANDARD
       ? BulletTypes.HOMING
       : BulletTypes.STANDARD;
 
-  // Оновлюємо текст кнопки
+
+
+  // ГЋГ­Г®ГўГ«ГѕВєГ¬Г® ГІГҐГЄГ±ГІ ГЄГ­Г®ГЇГЄГЁ
   changeTurretTypes.textContent = `Turret type - ${currentBulletType}`;
-  currentBulletType = currentBulletType;
+  currentBullet = currentBulletType;
   changeTypeBullets.textContent = `Now type bullets - ${currentBulletType}`;
+
 }

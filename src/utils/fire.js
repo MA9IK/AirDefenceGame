@@ -12,10 +12,10 @@ export default function fire(
   mouse,
   camera
 ) {
-  console.log(BulletTypes);
+  const raycaster = new THREE.Raycaster()
   if (currentBulletType !== BulletTypes.STANDARD) return;
-  const turret = fbxModels[0]; // Виберіть потрібну гармату
-  const muzzleVelocity = 50; // Початкова швидкість пулі
+  const turret = fbxModels[0]; // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+  const muzzleVelocity = 50; // adjust speed bullet
 
   const mouseDirection = new THREE.Vector3(
     (event.clientX / window.innerWidth) * 2 - 1,
@@ -24,12 +24,15 @@ export default function fire(
   );
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
+  
   mouseDirection.unproject(camera);
 
-  const direction = mouseDirection.sub(camera.position).normalize();
+  const mousePosition = new THREE.Vector3(mouse.x, mouse.y, -turret.position.z);
+  mousePosition.unproject(camera);
+  const direction = mousePosition.sub(camera.position).normalize();
+  
   const initialVelocity = direction.clone().multiplyScalar(muzzleVelocity);
-
+  
   const bullet = createBullet(turret, initialVelocity, world);
   bullets.push({ basic: bullet });
   scene.add(bullet.mesh);
