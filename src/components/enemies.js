@@ -21,7 +21,7 @@ export default function createEnemy(position, world, scene, enemies) {
   targetMesh.position.copy(position);
 
   targetBody.addEventListener('collide', function (event) {
-    console.log('Enemy collided with something!');
+    console.log(event.body);
   });
 
   enemies.push({ body: targetBody, mesh: targetMesh });

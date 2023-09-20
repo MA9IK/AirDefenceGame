@@ -10,11 +10,11 @@ export default function ground(scene, world) {
   );
   groundBody.position.y = -1.6;
   groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-  world.addBody(groundBody);
+  // world.addBody(groundBody);
 
   const loader = new FBXLoader();
   loader.load('./ground.fbx', fbx => {
-    fbx.scale.set(1, 1, 1); // Масштаб моделі за потребою
+    fbx.scale.set(1, 3, 1); // Масштаб моделі за потребою
     fbx.rotation.set(0, 20.4, 0);
     fbx.position.set(0, -1.5, 500);
     scene.add(fbx);
