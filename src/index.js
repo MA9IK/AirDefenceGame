@@ -56,7 +56,7 @@ loadAndAddTurret(
   0.005,
   turrets,
   fbxModels
-); // ����� �������� (3) - x-����������, ����� (1) - y-���������� (����� ������), ���� (2) - z-����������
+);
 loadAndAddTurret(
   'turret.fbx',
   new THREE.Vector3(-3, -1, 2),
@@ -64,10 +64,11 @@ loadAndAddTurret(
   0.005,
   turrets,
   fbxModels
-); // ����� �������� (-3) - x-����������, ����� (1) - y-���������� (����� ������), ���� (2) - z-����������
+);
+
 setInterval(() => {
-  const spawnX = 20;
-  const spawnY = Math.random() * 12 - -1;
+  const spawnX = 50;
+  const spawnY = Math.random() * 12 - -5;
   const enemyZ = 20;
   const position = new CANNON.Vec3(spawnX, spawnY, enemyZ);
   createEnemy(position, world, scene, enemies); // �������� ������� ���

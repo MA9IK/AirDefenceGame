@@ -32,11 +32,6 @@ export default function createBullet(turret, initialVelocity, world, scene) {
     initialVelocity.z
   );
 
-  bulletBody.addEventListener('collide', () => {
-    scene.remove(bulletMesh);
-    world.removeBody(bulletBody);
-  });
-
   world.addBody(bulletBody);
   return { body: bulletBody, mesh: bulletMesh };
 }
