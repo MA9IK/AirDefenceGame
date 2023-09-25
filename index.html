@@ -7,21 +7,38 @@
   </head>
   <body>
     <img id="crosshair" src="./crosshair.png" alt="Crosshair" />
+
+    <div id="ui-container">
+      <button id="change-turret-button"></button>
+      <button id="change-bullet-type-button"></button>
+      <div id="distance-turret-text">Current turret distance - 20</div>
+    </div>
   </body>
 
   <style>
     * {
       margin: 0;
+      padding: 0;
     }
 
     *::-webkit-scrollbar {
       display: none;
     }
 
+    body {
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
     #canvasColor {
       z-index: 998;
       opacity: 1;
       background: red;
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
     }
 
     #crosshair {
@@ -31,22 +48,56 @@
       pointer-events: none;
       z-index: 1;
     }
-  </style>
-  <!-- <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker
-          .register('sw.js', {})
-          .then(registration => {
-            console.log('Service Worker registered: ', registration);
-          })
-          .catch(registrationError => {
-            console.error(
-              'Service Worker registration failed: ',
-              registrationError
-            );
-          });
-      });
+
+    .container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
     }
-  </script> -->
+
+    .distanceTurret {
+      color: black;
+    }
+
+    .changeButtonType {
+      color: white;
+      background-color: blue;
+      border: none;
+      padding: 10px;
+      cursor: pointer;
+      right: 0;
+    }
+
+    .changeTypeBullets {
+      color: black;
+      background-color: green;
+      border: none;
+      padding: 10px;
+      cursor: pointer;
+    }
+
+    #ui-container {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+      text-align: center;
+    }
+
+    #change-turret-button,
+    #change-bullet-type-button {
+      margin: 5px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+
+    #distance-turret-text {
+      margin-top: 10px;
+    }
+  </style>
 </html>
