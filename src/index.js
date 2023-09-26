@@ -11,11 +11,8 @@ const mouse = new THREE.Vector2();
 let camera;
 let scene;
 let renderer;
-const maxTargetDistance = 20;
-let distanceTurret;
 let isPageActive = true;
 let changeTurretType;
-let changeTypeBullets;
 let changeButtonType;
 const bullets = [];
 const groundMeshes = [];
@@ -29,15 +26,21 @@ const turretTypes = {
   HOMING: 'Homing'
 };
 let currentBullet = BulletTypes.STANDARD;
+let currentBulletType = BulletTypes.STANDARD;
+let changeGravity;
+let resetChangesButton;
+
+let gravityValue = new CANNON.Vec3(0, -9.82, 0);
+
 
 const enemies = [];
-
-let currentBulletType = BulletTypes.STANDARD;
 const fbxModels = [];
 const turrets = [];
-const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
+
+const world = new CANNON.World({ gravity: gravityValue });
 
 init();
+ui();
 ground(scene, world);
 sun(scene);
 loadAndAddTurret(
@@ -63,7 +66,7 @@ setInterval(() => {
   const enemyZ = 20;
   const position = new CANNON.Vec3(spawnX, spawnY, enemyZ);
   createEnemy(position, world, scene, enemies);
-}, 1000);
+}, Math.random() * 3000 + 6000);
 
 animate();
 
@@ -77,7 +80,6 @@ document.addEventListener('visibilitychange', () => {
   isPageActive = document.visibilityState === 'hidden' ? false : true;
 });
 
-ui();
 
 function init() {
   camera = new THREE.PerspectiveCamera(
@@ -125,7 +127,7 @@ function loadAndAddTurret(modelPath, position, type, scale) {
 
     cannonTurretBody.position.copy(position);
 
-    // world.addBody(cannonTurretBody);
+    world.addBody(cannonTurretBody);
     scene.add(clonedFbx);
 
     turrets.push({ body: cannonTurretBody, type });
@@ -177,38 +179,38 @@ function ground() {
       mass: 0,
       shape: groundShape
     });
-    groundBody.position.set(0, -2, 0);
+    groundBody.position.set(0, -1.7, 0);
     groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 
-    fbx.scale.set(1, 5, 1); // Масштаб моделі за потребою
+    fbx.scale.set(1, 5, 1); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     fbx.rotation.set(0, 20.4, 0);
     fbx.position.set(0, -1.5, 500);
-    // Додайте тіло до світу Cannon.js
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅ Cannon.js
     world.addBody(groundBody);
 
-    // Додайте модель до сцени
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
     scene.add(fbx);
   });
 }
 
 function sun() {
   const sunGeometry = new THREE.SphereGeometry(1, 32, 32);
-  const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Жовтий колір
+  const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
   const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
 
-  sunMesh.position.set(0, 50, -20); // Приклад позиції сонця
+  sunMesh.position.set(0, 50, -20); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
   scene.add(sunMesh);
 
-  const sunlight = new THREE.DirectionalLight(0xffffff, 1); // Біле світло з інтенсивністю 1
-  sunlight.position.copy(sunMesh.position); // Позиція світла співпадає з позицією сонця
+  const sunlight = new THREE.DirectionalLight(0xffffff, 1); // пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ 1
+  sunlight.position.copy(sunMesh.position); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
   scene.add(sunlight);
 
-  sunlight.color.set('#fff'); // Змініть колір світла
-  sunlight.intensity = 2; // Змініть інтенсивність світла
+  sunlight.color.set('#fff'); // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
+  sunlight.intensity = 2; // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 
-  // sunlight.castShadow = true; // Увімкнути генерацію тіней від сонця
+  // sunlight.castShadow = true; // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 
-  // Налаштування параметрів тіней для об'єктів, які кидають тіні
+  // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅ'пїЅпїЅпїЅпїЅ, пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ
   sunlight.shadow.mapSize.width = 1024;
   sunlight.shadow.mapSize.height = 1024;
 }
@@ -216,28 +218,28 @@ function sun() {
 function createBullet(turret, initialVelocity) {
   const bulletBody = new CANNON.Body({
     mass: 1,
-    shape: new CANNON.Sphere(0.05) // Розмір пулі
+    shape: new CANNON.Sphere(0.05) // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ
   });
 
   const bulletMesh = new THREE.Mesh(
     new THREE.SphereGeometry(0.05),
-    new THREE.MeshBasicMaterial({ color: 0xff0000 }) // Колір пулі
+    new THREE.MeshBasicMaterial({ color: 0xff0000 }) // пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ
   );
 
-  // Перетворення позиції turret в систему координат Cannon.js
+  // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ turret пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Cannon.js
   const cannonPosition = new CANNON.Vec3(
     turret.position.x,
     turret.position.y,
     turret.position.z
   );
 
-  // Задаємо початкову позицію bulletBody
+  // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ bulletBody
   bulletBody.position.copy(cannonPosition);
 
   bulletMesh.position.copy(turret.position);
   bulletMesh.quaternion.copy(turret.quaternion);
 
-  // Задаємо початкову швидкість пулі
+  // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ
   bulletBody.velocity.set(
     initialVelocity.x,
     initialVelocity.y,
@@ -290,14 +292,28 @@ function toggleBulletType() {
 function ui() {
   const gui = new dat.GUI();
 
-  // Знаходження елементів UI за ID
-  changeTurretType = document.getElementById('change-turret-button');
-  changeButtonType = document.getElementById('change-bullet-type-button');
+  // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ UI пїЅпїЅ ID
+  changeTurretType = document.querySelector('#change-turret-button');
+  changeButtonType = document.querySelector('#change-bullet-type-button');
+  changeGravity = document.querySelector('#gravity')
+  resetChangesButton = document.querySelector('#reset-changes')
 
   changeButtonType.innerText = `Turret type - ${currentBulletType}`;
   changeTurretType.innerText = `Turret type - ${currentBulletType}`;
 
-  // Додавання обробників подій для кнопок
+  changeGravity.addEventListener('input', (event) => {
+    console.log(event.target.value)
+    gravityValue = new CANNON.Vec3(0, +event.target.value, 0)
+    world.gravity.copy(gravityValue);
+  })
+
+  resetChangesButton.addEventListener('click', (event) => {
+    gravityValue = new CANNON.Vec3(0, -9.82, 0)
+    world.gravity.copy(gravityValue)
+    changeGravity.value = ''
+  })
+
+  // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
   changeTurretType.addEventListener('click', toggleBulletType);
   changeButtonType.addEventListener('click', toggleBulletType);
 
@@ -320,6 +336,13 @@ function ui() {
     closeControlsButton.style.display = 'none';
   }
 }
+
+window.addEventListener('resize', function () {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
 
 function animate() {
   requestAnimationFrame(animate);
@@ -408,15 +431,8 @@ function animate() {
     enemyMesh.position.copy(enemyBody.position);
     enemyMesh.quaternion.copy(enemyBody.quaternion);
   });
-
+  
   world.fixedStep();
-
+  
   renderer.render(scene, camera);
 }
-
-window.addEventListener('resize', function () {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
