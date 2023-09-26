@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import * as dat from 'dat.gui';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import * as CANNON from 'cannon-es';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const params = {
   color: 'blue'
 };
@@ -14,9 +16,13 @@ let renderer;
 let isPageActive = true;
 let changeTurretType;
 let changeButtonType;
+const rocketFuel = new Map();
+
 const bullets = [];
+const rockets = [];
 const groundMeshes = [];
 const turretRotationAngles = [];
+
 const BulletTypes = {
   STANDARD: 'Standard',
   HOMING: 'Homing'
@@ -31,7 +37,6 @@ let changeGravity;
 let resetChangesButton;
 
 let gravityValue = new CANNON.Vec3(0, -9.82, 0);
-
 
 const enemies = [];
 const fbxModels = [];
@@ -60,13 +65,16 @@ loadAndAddTurret(
   fbxModels
 );
 
-setInterval(() => {
-  const spawnX = 45;
-  const spawnY = Math.random() * 12 - -5;
-  const enemyZ = 20;
-  const position = new CANNON.Vec3(spawnX, spawnY, enemyZ);
-  createEnemy(position, world, scene, enemies);
-}, Math.random() * 3000 + 6000);
+setInterval(
+  () => {
+    const spawnX = 45;
+    const spawnY = Math.random() * 12 - -5;
+    const enemyZ = 20;
+    const position = new CANNON.Vec3(spawnX, spawnY, enemyZ);
+    createEnemy(position, world, scene, enemies);
+  },
+  Math.random() * 3000 + 6000
+);
 
 animate();
 
@@ -76,10 +84,14 @@ scene.add(gridHelper);
 const axesHelper = new THREE.AxesHelper(4);
 scene.add(axesHelper);
 
+// const controls = new OrbitControls(camera, renderer.domElement);
+// controls.enableDamping = true;
+// controls.target.y = 0.1;
+// controls.update();
+
 document.addEventListener('visibilitychange', () => {
   isPageActive = document.visibilityState === 'hidden' ? false : true;
 });
-
 
 function init() {
   camera = new THREE.PerspectiveCamera(
@@ -106,7 +118,7 @@ function init() {
   });
 }
 
-function loadAndAddTurret(modelPath, position, type, scale) {
+function loadAndAddTurret(modelPath, position, type, scale, name) {
   const loader = new FBXLoader();
 
   loader.load(modelPath, fbx => {
@@ -179,6 +191,7 @@ function ground() {
       mass: 0,
       shape: groundShape
     });
+
     groundBody.position.set(0, -1.7, 0);
     groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 
@@ -250,10 +263,47 @@ function createBullet(turret, initialVelocity) {
   return { body: bulletBody, mesh: bulletMesh };
 }
 
-function fire(event) {
-  if (currentBulletType !== BulletTypes.STANDARD) return;
+function createRocket(turret, initialVelocity) {
+  const fuel = 20; // liters
+  let mass = 50;
+  if (fuel) mass += fuel;
 
+  const rocketBody = new CANNON.Body({
+    mass,
+    shape: new CANNON.Sphere(0.05)
+  });
+
+  rocketFuel.set(rocketBody, fuel);
+
+  const rocketMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.05),
+    new THREE.MeshBasicMaterial({ color: 'green' })
+  );
+
+  const cannonPosition = new CANNON.Vec3(
+    turret.position.x,
+    turret.position.y,
+    turret.position.z
+  );
+
+  rocketBody.position.copy(cannonPosition);
+
+  rocketMesh.position.copy(turret.position);
+  rocketMesh.quaternion.copy(turret.quaternion);
+
+  rocketBody.velocity.set(
+    initialVelocity.x,
+    initialVelocity.y,
+    initialVelocity.z
+  );
+
+  world.addBody(rocketBody);
+  return { body: rocketBody, mesh: rocketMesh };
+}
+
+function fire(event) {
   const turret = fbxModels[0];
+  const secondTurret = fbxModels[1];
   const muzzleVelocity = 60;
 
   const mouseDirection = new THREE.Vector3(
@@ -273,9 +323,15 @@ function fire(event) {
 
   const initialVelocity = direction.clone().multiplyScalar(muzzleVelocity);
 
-  const bullet = createBullet(turret, initialVelocity, world, scene);
-  bullets.push({ basic: bullet });
-  scene.add(bullet.mesh);
+  if (currentBulletType == BulletTypes.STANDARD) {
+    const bullet = createBullet(turret, initialVelocity);
+    bullets.push({ basic: bullet });
+    scene.add(bullet.mesh);
+  } else {
+    const rocket = createRocket(secondTurret, initialVelocity);
+    rockets.push(rocket);
+    scene.add(rocket.mesh);
+  }
 }
 
 function toggleBulletType() {
@@ -284,7 +340,7 @@ function toggleBulletType() {
       ? BulletTypes.HOMING
       : BulletTypes.STANDARD;
 
-  changeButtonType.textContent = `Turret type - ${currentBulletType}`;
+  changeTurretType.textContent = `Turret type - ${currentBulletType}`;
   currentBullet = currentBulletType;
   changeButtonType.textContent = `Now type bullets - ${currentBulletType}`;
 }
@@ -295,23 +351,23 @@ function ui() {
   // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ UI пїЅпїЅ ID
   changeTurretType = document.querySelector('#change-turret-button');
   changeButtonType = document.querySelector('#change-bullet-type-button');
-  changeGravity = document.querySelector('#gravity')
-  resetChangesButton = document.querySelector('#reset-changes')
+  changeGravity = document.querySelector('#gravity');
+  resetChangesButton = document.querySelector('#reset-changes');
 
-  changeButtonType.innerText = `Turret type - ${currentBulletType}`;
   changeTurretType.innerText = `Turret type - ${currentBulletType}`;
+  changeButtonType.innerText = `Turret type - ${currentBulletType}`;
 
-  changeGravity.addEventListener('input', (event) => {
-    console.log(event.target.value)
-    gravityValue = new CANNON.Vec3(0, +event.target.value, 0)
+  changeGravity.addEventListener('input', event => {
+    console.log(event.target.value);
+    gravityValue = new CANNON.Vec3(0, +event.target.value, 0);
     world.gravity.copy(gravityValue);
-  })
+  });
 
-  resetChangesButton.addEventListener('click', (event) => {
-    gravityValue = new CANNON.Vec3(0, -9.82, 0)
-    world.gravity.copy(gravityValue)
-    changeGravity.value = ''
-  })
+  resetChangesButton.addEventListener('click', event => {
+    gravityValue = new CANNON.Vec3(0, -9.82, 0);
+    world.gravity.copy(gravityValue);
+    changeGravity.value = '';
+  });
 
   // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
   changeTurretType.addEventListener('click', toggleBulletType);
@@ -344,9 +400,54 @@ window.addEventListener('resize', function () {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+function updateRockets() {
+  rockets.forEach(rocket => {
+    const rocketBody = rocket.body;
+    const rocketMesh = rocket.mesh;
+
+    // Знайдіть найближчу ціль
+    let closestTarget = null;
+    let closestDistance = Infinity;
+
+    enemies.forEach(enemy => {
+      const enemyBody = enemy.body;
+      const distance = rocketBody.position.distanceTo(enemyBody.position);
+
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestTarget = enemyBody;
+      }
+    });
+
+    if (closestTarget) {
+      // Обчисліть напрямок до цілі
+      const directionToTarget = new CANNON.Vec3();
+      closestTarget.position.vsub(rocketBody.position, directionToTarget);
+      directionToTarget.normalize();
+
+      // Змініть напрямок ракети на напрямок до цілі
+      rocketBody.velocity.copy(directionToTarget);
+
+      // Додайте випадкове відхилення
+      const randomDeviation = new CANNON.Vec3(
+        directionToTarget.x,
+        directionToTarget.y,
+        directionToTarget.z
+      );
+      randomDeviation.normalize();
+      rocketBody.velocity.vadd(randomDeviation, rocketBody.velocity);
+
+      // Оновіть позицію ракети
+      rocketMesh.position.copy(rocketBody.position);
+      rocketMesh.quaternion.copy(rocketBody.quaternion);
+    }
+  });
+}
+
 function animate() {
   requestAnimationFrame(animate);
 
+  updateRockets();
   fbxModels.forEach((item, index) => {
     const turretInfo = turrets[index];
 
@@ -387,6 +488,27 @@ function animate() {
 
   groundMeshes.forEach(groundMesh => {
     groundMesh.position.copy(new THREE.Vector3(0, -1.55, 0));
+  });
+
+  rockets.forEach(rocket => {
+    const rocketBody = rocket.body;
+    const rocketMesh = rocket.mesh;
+
+    const fuel = rocketFuel.get(rocketBody);
+
+    if (fuel > 0) {
+      rocketFuel.set(rocketBody, fuel - 0.05);
+
+      console.log(fuel);
+
+      rocketMesh.position.copy(rocketBody.position);
+      rocketMesh.quaternion.copy(rocketBody.quaternion);
+    } else {
+      scene.remove(rocketMesh);
+      world.removeBody(rocketBody);
+      rockets.splice(rockets.indexOf(rocket), 1);
+      rocketFuel.delete(rocketBody);
+    }
   });
 
   for (let i = bullets.length - 1; i >= 0; i--) {
@@ -431,8 +553,8 @@ function animate() {
     enemyMesh.position.copy(enemyBody.position);
     enemyMesh.quaternion.copy(enemyBody.quaternion);
   });
-  
+
   world.fixedStep();
-  
+
   renderer.render(scene, camera);
 }
