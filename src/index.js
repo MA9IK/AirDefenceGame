@@ -68,12 +68,13 @@ loadAndAddTurret(
 setInterval(
   () => {
     const spawnX = 45;
-    const spawnY = Math.random() * 12 - -5;
+    const spawnY = Math.random() * 12 - -7;
     const enemyZ = 20;
     const position = new CANNON.Vec3(spawnX, spawnY, enemyZ);
     createEnemy(position, world, scene, enemies);
   },
   Math.random() * 3000 + 6000
+  // 1000
 );
 
 animate();
@@ -158,29 +159,30 @@ function onMouseMove(event) {
 }
 
 function createEnemy(position) {
-  const targetShape = new CANNON.Sphere(0.1);
-  const targetBody = new CANNON.Body({
-    mass: 100,
-    shape: targetShape,
-    position,
-    linearFactor: new CANNON.Vec3(1, 0.03, 0)
+  const loader = new FBXLoader();
+
+  loader.load('rocket.fbx', fbx => {
+    const targetShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5));
+    const targetBody = new CANNON.Body({
+      mass: 100,
+      shape: targetShape,
+      position,
+      linearFactor: new CANNON.Vec3(1, 0.03, 0)
+    });
+    world.addBody(targetBody);
+
+    const dt = 1 / 60;
+    const strength = 73000;
+
+    fbx.scale.set(0.005, 0.005, 0.005);
+
+    const impulse = new CANNON.Vec3(-strength * dt, 0, 0);
+
+    targetBody.applyImpulse(impulse);
+    scene.add(fbx);
+
+    enemies.push({ body: targetBody, mesh: fbx });
   });
-
-  world.addBody(targetBody);
-  const dt = 1 / 60;
-  const strength = 70300;
-
-  const targetGeometry = new THREE.SphereGeometry(0.1, 16, 16);
-  const targetMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-  const targetMesh = new THREE.Mesh(targetGeometry, targetMaterial);
-  // targetBody.linearDamping = 0.1;
-  scene.add(targetMesh);
-
-  const impulse = new CANNON.Vec3(-strength * dt, 0, 0);
-
-  targetBody.applyImpulse(impulse);
-
-  enemies.push({ body: targetBody, mesh: targetMesh });
 }
 
 function ground() {
@@ -263,10 +265,13 @@ function createBullet(turret, initialVelocity) {
   return { body: bulletBody, mesh: bulletMesh };
 }
 
-function createRocket(turret, initialVelocity) {
+function createRocket(turret) {
   const fuel = 20; // liters
   let mass = 50;
   if (fuel) mass += fuel;
+
+  // Increase the initial velocity to make the rocket move faster
+  const initialVelocity = new CANNON.Vec3(20, 0, 0); // Adjust the values as needed
 
   const rocketBody = new CANNON.Body({
     mass,
@@ -291,11 +296,7 @@ function createRocket(turret, initialVelocity) {
   rocketMesh.position.copy(turret.position);
   rocketMesh.quaternion.copy(turret.quaternion);
 
-  rocketBody.velocity.set(
-    initialVelocity.x,
-    initialVelocity.y,
-    initialVelocity.z
-  );
+  rocketBody.velocity.copy(initialVelocity); // Set the initial velocity
 
   world.addBody(rocketBody);
   return { body: rocketBody, mesh: rocketMesh };
@@ -400,54 +401,38 @@ window.addEventListener('resize', function () {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-function updateRockets() {
-  rockets.forEach(rocket => {
-    const rocketBody = rocket.body;
-    const rocketMesh = rocket.mesh;
+function calculateRotationQuaternion(velocity) {
+  // Calculate the rotation quaternion based on the velocity vector
+  const angle = Math.atan2(-velocity.z, velocity.x); // Adjust the components
+  return new CANNON.Quaternion().setFromEuler(50, angle, 0);
+}
 
-    // Знайдіть найближчу ціль
-    let closestTarget = null;
-    let closestDistance = Infinity;
+function getDirectionToNearestEnemy(rocketPosition, enemies) {
+  let nearestEnemy;
+  let nearestDistance = Number.MAX_VALUE;
 
-    enemies.forEach(enemy => {
-      const enemyBody = enemy.body;
-      const distance = rocketBody.position.distanceTo(enemyBody.position);
+  for (const enemy of enemies) {
+    const enemyPosition = enemy.body.position;
+    const distance = rocketPosition.distanceTo(enemyPosition);
 
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closestTarget = enemyBody;
-      }
-    });
-
-    if (closestTarget) {
-      // Обчисліть напрямок до цілі
-      const directionToTarget = new CANNON.Vec3();
-      closestTarget.position.vsub(rocketBody.position, directionToTarget);
-      directionToTarget.normalize();
-
-      // Змініть напрямок ракети на напрямок до цілі
-      rocketBody.velocity.copy(directionToTarget);
-
-      // Додайте випадкове відхилення
-      const randomDeviation = new CANNON.Vec3(
-        directionToTarget.x,
-        directionToTarget.y,
-        directionToTarget.z
-      );
-      randomDeviation.normalize();
-      rocketBody.velocity.vadd(randomDeviation, rocketBody.velocity);
-
-      // Оновіть позицію ракети
-      rocketMesh.position.copy(rocketBody.position);
-      rocketMesh.quaternion.copy(rocketBody.quaternion);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestEnemy = enemyPosition;
     }
-  });
+  }
+
+  if (nearestEnemy) {
+    const direction = new CANNON.Vec3().copy(nearestEnemy).vsub(rocketPosition);
+    direction.normalize();
+    return direction;
+  }
+
+  return null;
 }
 
 function animate() {
   requestAnimationFrame(animate);
 
-  updateRockets();
   fbxModels.forEach((item, index) => {
     const turretInfo = turrets[index];
 
@@ -490,24 +475,51 @@ function animate() {
     groundMesh.position.copy(new THREE.Vector3(0, -1.55, 0));
   });
 
-  rockets.forEach(rocket => {
+  rockets.forEach((rocket, rocketIndex) => {
     const rocketBody = rocket.body;
     const rocketMesh = rocket.mesh;
 
-    const fuel = rocketFuel.get(rocketBody);
+    const directionToNearestEnemy = getDirectionToNearestEnemy(
+      rocketBody.position,
+      enemies
+    );
 
-    if (fuel > 0) {
-      rocketFuel.set(rocketBody, fuel - 0.05);
+    if (directionToNearestEnemy) {
+      // Adjust the rocket's velocity based on the direction to the nearest enemy
+      rocketBody.velocity.copy(directionToNearestEnemy);
+      rocketBody.velocity.normalize();
+      rocketBody.velocity.scale(rocketBody.mass, rocketBody.velocity);
+    }
 
-      console.log(fuel);
+    rocketMesh.position.copy(rocketBody.position);
+    rocketMesh.quaternion.copy(rocketBody.quaternion);
 
-      rocketMesh.position.copy(rocketBody.position);
-      rocketMesh.quaternion.copy(rocketBody.quaternion);
-    } else {
-      scene.remove(rocketMesh);
-      world.removeBody(rocketBody);
-      rockets.splice(rockets.indexOf(rocket), 1);
-      rocketFuel.delete(rocketBody);
+    // Check for collisions with enemies
+    for (let enemyIndex = enemies.length - 1; enemyIndex >= 0; enemyIndex--) {
+      const enemy = enemies[enemyIndex];
+      const enemyBody = enemy.body;
+      const enemyMesh = enemy.mesh;
+
+      // Calculate the distance between the rocket and enemy
+      const distance = rocketBody.position.distanceTo(enemyBody.position);
+
+      // Assuming that rockets and enemies have a specific collision radius
+      const rocketRadius = 0.05; // Adjust as needed
+      const enemyRadius = 0.3; // Adjust as needed
+
+      if (distance < rocketRadius + enemyRadius) {
+        // Collision detected
+
+        // Remove the rocket
+        scene.remove(rocketMesh);
+        world.removeBody(rocketBody);
+        rockets.splice(rocketIndex, 1);
+
+        // Remove the enemy
+        scene.remove(enemyMesh);
+        world.removeBody(enemyBody);
+        enemies.splice(enemyIndex, 1);
+      }
     }
   });
 
@@ -550,8 +562,11 @@ function animate() {
     const enemyMesh = enemy.mesh;
     const enemyBody = enemy.body;
 
+    // Update rotation quaternion based on velocity
+    const rotationQuaternion = calculateRotationQuaternion(enemyBody.velocity);
+
     enemyMesh.position.copy(enemyBody.position);
-    enemyMesh.quaternion.copy(enemyBody.quaternion);
+    enemyMesh.quaternion.copy(rotationQuaternion); // Set the new rotation quaternion
   });
 
   world.fixedStep();
