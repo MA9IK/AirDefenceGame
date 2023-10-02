@@ -11,6 +11,8 @@
     <div id="ui-container">
       <button id="change-turret-button"></button>
       <button id="change-bullet-type-button"></button>
+      <button id="add-rocket-launch">Add rocket launch</button>
+      <button id="add-basic-turret">Add basic turret</button>
       <input type="text" id="gravity" placeholder="Change gravity">
       <button id="reset-changes">Reset changes</button>
     </div>
@@ -20,6 +22,12 @@
     * {
       margin: 0;
       padding: 0;
+    }
+
+    #add-rocket-launch,
+    #reset-changes {
+      /* display: block; */
+      padding: 5px 10px;
     }
 
     *::-webkit-scrollbar {
@@ -50,37 +58,11 @@
       z-index: 1;
     }
 
-    .container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-    }
-
-    .distanceTurret {
-      color: black;
-    }
-
-    .changeButtonType {
-      color: white;
-      background-color: blue;
-      border: none;
-      padding: 10px;
-      cursor: pointer;
-      right: 0;
-    }
-
-    .changeTypeBullets {
-      color: black;
-      background-color: green;
-      border: none;
-      padding: 10px;
-      cursor: pointer;
-    }
-
     #ui-container {
       position: absolute;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
       bottom: 10px;
       left: 50%;
       transform: translateX(-50%);
@@ -92,13 +74,10 @@
 
     #change-turret-button,
     #change-bullet-type-button {
-      margin: 5px;
       padding: 5px 10px;
       cursor: pointer;
     }
 
-    #distance-turret-text {
-      margin-top: 10px;
-    }
+
   </style>
 </html>
