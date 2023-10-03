@@ -8,12 +8,18 @@
   <body>
     <img id="crosshair" src="./crosshair.png" alt="Crosshair" />
 
+    <div class="stats">
+      <p class="firedBullets">Bullets Fired: 0</p>
+      <p class="rocketsLaunched">Rockets Launched: 0</p>
+      <p class="enemiesKilled">Enemies Killed: 0</p>
+    </div>
+
     <div id="ui-container">
       <button id="change-turret-button"></button>
       <button id="change-bullet-type-button"></button>
       <button id="add-rocket-launch">Add rocket launch</button>
       <button id="add-basic-turret">Add basic turret</button>
-      <input type="text" id="gravity" placeholder="Change gravity">
+      <input type="text" id="gravity" placeholder="Change gravity" />
       <button id="reset-changes">Reset changes</button>
     </div>
   </body>
@@ -72,12 +78,18 @@
       text-align: center;
     }
 
+    .stats {
+      position: absolute;
+      display: grid;
+      grid-template-columns: 1fr;
+      background: rgba(255, 255, 255, 0.7);
+      gap: 10px;
+    }
+
     #change-turret-button,
     #change-bullet-type-button {
       padding: 5px 10px;
       cursor: pointer;
     }
-
-
   </style>
 </html>

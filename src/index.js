@@ -3,7 +3,6 @@ import * as dat from 'dat.gui';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import * as CANNON from 'cannon-es';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const params = {
   color: 'blue'
 };
@@ -16,6 +15,12 @@ let renderer;
 let isPageActive = true;
 let changeTurretType;
 let changeButtonType;
+const bulletsFired = document.querySelector('.firedBullets');
+const rocketLaunched = document.querySelector('.rocketsLaunched');
+const enemiesKilled = document.querySelector('.enemiesKilled');
+let bulletsFiredCount = 0;
+let rocketsLaunchedCount = 0;
+let enemiesKilledCount = 0;
 const rocketFuel = new Map();
 
 const bullets = [];
@@ -79,16 +84,6 @@ setInterval(
 
 animate();
 
-const gridHelper = new THREE.GridHelper(12, 12);
-scene.add(gridHelper);
-
-const axesHelper = new THREE.AxesHelper(4);
-scene.add(axesHelper);
-
-// const controls = new OrbitControls(camera, renderer.domElement);
-// controls.enableDamping = true;
-// controls.target.y = 0.1;
-// controls.update();
 
 document.addEventListener('visibilitychange', () => {
   isPageActive = document.visibilityState === 'hidden' ? false : true;
@@ -109,6 +104,19 @@ function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
+  // const controls = new OrbitControls(camera, renderer.domElement);
+
+  // controls.enableDamping = true;
+  // controls.target.y = 0.01;
+  // controls.enableKeys = true;
+  // controls.listenToKeyEvents(document.body);
+  // controls.update();
+  // controls.keys = {
+  //   LEFT: 'ArrowLeft', //left arrow
+  //   UP: 'ArrowUp', // up arrow
+  //   RIGHT: 'ArrowRight', // right arrow
+  //   BOTTOM: 'ArrowDown' // down arrow
+  // };
   document.body.style.cursor = 'none';
 
   camera.position.set(0, 1, -3);
@@ -261,6 +269,8 @@ function createBullet(turret, initialVelocity) {
     initialVelocity.z
   );
 
+  bulletsFiredCount++;
+  bulletsFired.textContent = `Bullets Fired: ${bulletsFiredCount}`;
   world.addBody(bulletBody);
   return { body: bulletBody, mesh: bulletMesh };
 }
@@ -271,7 +281,7 @@ function createRocket(turret) {
   if (fuel) mass += fuel;
 
   // Increase the initial velocity to make the rocket move faster
-  const initialVelocity = new CANNON.Vec3(20, 0, 0); // Adjust the values as needed
+  const initialVelocity = new CANNON.Vec3(4, 0, 0); // Adjust the values as needed
 
   const rocketBody = new CANNON.Body({
     mass,
@@ -296,9 +306,12 @@ function createRocket(turret) {
   rocketMesh.position.copy(turret.position);
   rocketMesh.quaternion.copy(turret.quaternion);
 
-  rocketBody.velocity.copy(initialVelocity); // Set the initial velocity
+  rocketBody.velocity.copy(initialVelocity);
 
   world.addBody(rocketBody);
+  rocketsLaunchedCount++;
+  rocketLaunched.textContent = `Rockets Launched: ${rocketsLaunchedCount}`;
+
   return { body: rocketBody, mesh: rocketMesh };
 }
 
@@ -394,7 +407,7 @@ function ui() {
   }
 }
 
-window.addEventListener('resize', function () {
+window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 
@@ -456,11 +469,11 @@ function animate() {
       turretRotationAngles[index] +=
         (angleToMouse - turretRotationAngles[index]) * smoothingFactor;
       item.rotation.y = turretRotationAngles[index];
-    } else {
-      const angleToZero = 0;
-      const angleDiff = angleToZero - turretRotationAngles[index];
-      turretRotationAngles[index] += angleDiff * smoothingFactor;
+      return;
     }
+    const angleToZero = 0;
+    const angleDiff = angleToZero - turretRotationAngles[index];
+    turretRotationAngles[index] += angleDiff * smoothingFactor;
   });
 
   bullets.forEach(bullet => {
@@ -483,6 +496,20 @@ function animate() {
       rocketBody.position,
       enemies
     );
+
+    const fuel = rocketFuel.get(rocketBody);
+
+    rocketFuel.set(rocketBody, fuel - 0.3);
+
+    if (!directionToNearestEnemy) {
+      return;
+    }
+
+    if (fuel <= 0) {
+      scene.remove(rocketMesh);
+      world.removeBody(rocketBody);
+      rockets.splice(rocketIndex, 1);
+    }
 
     if (directionToNearestEnemy) {
       // Adjust the rocket's velocity based on the direction to the nearest enemy
@@ -509,7 +536,8 @@ function animate() {
 
       if (distance < rocketRadius + enemyRadius) {
         // Collision detected
-
+        enemiesKilledCount++;
+        enemiesKilled.textContent = `Enemies Killed: ${enemiesKilledCount}`;
         // Remove the rocket
         scene.remove(rocketMesh);
         world.removeBody(rocketBody);
@@ -542,6 +570,8 @@ function animate() {
 
       if (distance < bulletRadius + enemyRadius) {
         // Collision detected
+        enemiesKilledCount++;
+        enemiesKilled.textContent = `Enemies Killed: ${enemiesKilledCount}`;
         // Remove the bullet
         scene.remove(bulletMesh);
         world.removeBody(bulletBody);
