@@ -18,6 +18,8 @@ let changeButtonType;
 const bulletsFired = document.querySelector('.firedBullets');
 const rocketLaunched = document.querySelector('.rocketsLaunched');
 const enemiesKilled = document.querySelector('.enemiesKilled');
+const statsWindow = document.querySelector('.stats')
+let rocketFuelStats;
 let bulletsFiredCount = 0;
 let rocketsLaunchedCount = 0;
 let enemiesKilledCount = 0;
@@ -47,7 +49,7 @@ const enemies = [];
 const fbxModels = [];
 const turrets = [];
 
-const world = new CANNON.World({ gravity: gravityValue });
+const world = new CANNON.World({ gravity: gravityValue }); // m/s²
 
 init();
 ui();
@@ -55,7 +57,7 @@ ground(scene, world);
 sun(scene);
 loadAndAddTurret(
   'turret.fbx',
-  new THREE.Vector3(3, -1, 2),
+  new THREE.Vector3(3, -1.2, 2),
   turretTypes.STANDARD,
   0.005,
   turrets,
@@ -63,7 +65,7 @@ loadAndAddTurret(
 );
 loadAndAddTurret(
   'turret.fbx',
-  new THREE.Vector3(-3, -1, 2),
+  new THREE.Vector3(-3, -1.2, 2),
   turretTypes.HOMING,
   0.005,
   turrets,
@@ -73,7 +75,7 @@ loadAndAddTurret(
 setInterval(
   () => {
     const spawnX = 45;
-    const spawnY = Math.random() * 12 - -7;
+    const spawnY = Math.random() * 10 - -7;
     const enemyZ = 20;
     const position = new CANNON.Vec3(spawnX, spawnY, enemyZ);
     createEnemy(position, world, scene, enemies);
@@ -104,13 +106,13 @@ function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
-  // const controls = new OrbitControls(camera, renderer.domElement);
+  const controls = new OrbitControls(camera, renderer.domElement);
 
-  // controls.enableDamping = true;
+  controls.enableDamping = true;
   // controls.target.y = 0.01;
   // controls.enableKeys = true;
   // controls.listenToKeyEvents(document.body);
-  // controls.update();
+  controls.update();
   // controls.keys = {
   //   LEFT: 'ArrowLeft', //left arrow
   //   UP: 'ArrowUp', // up arrow
@@ -198,6 +200,7 @@ function ground() {
   loader.load('./ground.fbx', fbx => {
     const groundShape = new CANNON.Plane();
     const groundBody = new CANNON.Body({
+      type: CANNON.Body.STATIC,
       mass: 0,
       shape: groundShape
     });
@@ -205,35 +208,31 @@ function ground() {
     groundBody.position.set(0, -1.7, 0);
     groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 
-    fbx.scale.set(1, 5, 1); // ������� ����� �� ��������
+    fbx.scale.set(2, 7, 1); // adjust scale of ground 
     fbx.rotation.set(0, 20.4, 0);
     fbx.position.set(0, -1.5, 500);
-    // ������� ��� �� ���� Cannon.js
     world.addBody(groundBody);
 
-    // ������� ������ �� �����
     scene.add(fbx);
   });
 }
 
 function sun() {
   const sunGeometry = new THREE.SphereGeometry(1, 32, 32);
-  const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // ������ ����
+  const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); //            
   const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
 
-  sunMesh.position.set(0, 50, -20); // ������� ������� �����
+  sunMesh.position.set(0, 50, -20); //                      
   scene.add(sunMesh);
 
-  const sunlight = new THREE.DirectionalLight(0xffffff, 1); // ���� ����� � ������������� 1
-  sunlight.position.copy(sunMesh.position); // ������� ����� ������� � �������� �����
+  const sunlight = new THREE.DirectionalLight(0xffffff, 1); //                            1
+  sunlight.position.copy(sunMesh.position); //                                       
   scene.add(sunlight);
 
-  sunlight.color.set('#fff'); // ������ ���� �����
-  sunlight.intensity = 2; // ������ ������������� �����
+  sunlight.color.set('#fff'); //                  
+  sunlight.intensity = 2; //                           
 
-  // sunlight.castShadow = true; // �������� ��������� ���� �� �����
 
-  // ������������ ��������� ���� ��� ��'����, �� ������� ���
   sunlight.shadow.mapSize.width = 1024;
   sunlight.shadow.mapSize.height = 1024;
 }
@@ -241,28 +240,25 @@ function sun() {
 function createBullet(turret, initialVelocity) {
   const bulletBody = new CANNON.Body({
     mass: 1,
-    shape: new CANNON.Sphere(0.05) // ����� ���
+    shape: new CANNON.Sphere(0.05) //          
   });
 
   const bulletMesh = new THREE.Mesh(
     new THREE.SphereGeometry(0.05),
-    new THREE.MeshBasicMaterial({ color: 0xff0000 }) // ���� ���
+    new THREE.MeshBasicMaterial({ color: 0xff0000 }) //         
   );
 
-  // ������������ ������� turret � ������� ��������� Cannon.js
   const cannonPosition = new CANNON.Vec3(
     turret.position.x,
     turret.position.y,
     turret.position.z
   );
 
-  // ������ ��������� ������� bulletBody
   bulletBody.position.copy(cannonPosition);
 
   bulletMesh.position.copy(turret.position);
   bulletMesh.quaternion.copy(turret.quaternion);
 
-  // ������ ��������� �������� ���
   bulletBody.velocity.set(
     initialVelocity.x,
     initialVelocity.y,
@@ -280,12 +276,28 @@ function createRocket(turret) {
   let mass = 50;
   if (fuel) mass += fuel;
 
+  rocketFuelStats = document.createElement('p')
+
+  rocketFuelStats.innerText = `fuel in rocket - ${fuel}`
+
+  statsWindow.append(rocketFuelStats)
+
+
+  const directionToNearestEnemy = getDirectionToNearestEnemy( // if direction to nearest is undefined, block
+    rocketBody.position,
+    enemies
+  );
+
+  if (!directionToNearestEnemy) {
+    return;
+  }
+
   // Increase the initial velocity to make the rocket move faster
   const initialVelocity = new CANNON.Vec3(4, 0, 0); // Adjust the values as needed
 
   const rocketBody = new CANNON.Body({
     mass,
-    shape: new CANNON.Sphere(0.05)
+    shape: new CANNON.Box(0.05, 0.05, 0.05) /* new CANNON.Sphere(0.05) */
   });
 
   rocketFuel.set(rocketBody, fuel);
@@ -306,7 +318,7 @@ function createRocket(turret) {
   rocketMesh.position.copy(turret.position);
   rocketMesh.quaternion.copy(turret.quaternion);
 
-  rocketBody.velocity.copy(initialVelocity);
+  // rocketBody.velocity.copy(initialVelocity); // init velocity, if havent target, dont fire
 
   world.addBody(rocketBody);
   rocketsLaunchedCount++;
@@ -362,7 +374,6 @@ function toggleBulletType() {
 function ui() {
   const gui = new dat.GUI();
 
-  // ����������� �������� UI �� ID
   changeTurretType = document.querySelector('#change-turret-button');
   changeButtonType = document.querySelector('#change-bullet-type-button');
   changeGravity = document.querySelector('#gravity');
@@ -383,22 +394,11 @@ function ui() {
     changeGravity.value = '';
   });
 
-  // ��������� ��������� ���� ��� ������
   changeTurretType.addEventListener('click', toggleBulletType);
   changeButtonType.addEventListener('click', toggleBulletType);
 
   renderer.domElement.addEventListener('click', event => {
-    fire(
-      event,
-      scene,
-      world,
-      fbxModels,
-      currentBulletType,
-      BulletTypes,
-      bullets,
-      mouse,
-      camera
-    );
+    fire(event);
   });
 
   const closeControlsButton = gui.domElement.querySelector('.close-button');
@@ -512,7 +512,6 @@ function animate() {
     }
 
     if (directionToNearestEnemy) {
-      // Adjust the rocket's velocity based on the direction to the nearest enemy
       rocketBody.velocity.copy(directionToNearestEnemy);
       rocketBody.velocity.normalize();
       rocketBody.velocity.scale(rocketBody.mass, rocketBody.velocity);
