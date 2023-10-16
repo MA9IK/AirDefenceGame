@@ -6,11 +6,18 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const params = {
   color: 'blue'
 };
+const parameters = {
+  elevation: 2,
+  azimuth: 180
+};
+import { Sky } from 'three/addons/objects/Sky.js';
+import { Water } from 'three/addons/objects/Water.js';
+import Stats from 'three/addons/libs/stats.module.js';
 
 const mouse = new THREE.Vector2();
 
 let camera;
-let scene;
+let scene, stats, groundBody;
 let renderer;
 let isPageActive = true;
 let changeTurretType;
@@ -18,13 +25,14 @@ let changeButtonType;
 const bulletsFired = document.querySelector('.firedBullets');
 const rocketLaunched = document.querySelector('.rocketsLaunched');
 const enemiesKilled = document.querySelector('.enemiesKilled');
-const statsWindow = document.querySelector('.stats')
-let rocketFuelStats;
 let bulletsFiredCount = 0;
 let rocketsLaunchedCount = 0;
 let enemiesKilledCount = 0;
 const rocketFuel = new Map();
 
+let timeScale = 0.5;
+
+let sun, sky, water;
 const bullets = [];
 const rockets = [];
 const groundMeshes = [];
@@ -49,15 +57,15 @@ const enemies = [];
 const fbxModels = [];
 const turrets = [];
 
-const world = new CANNON.World({ gravity: gravityValue }); // m/sÂ²
+const world = new CANNON.World({ gravity: gravityValue });
 
 init();
 ui();
 ground(scene, world);
-sun(scene);
+sun1();
 loadAndAddTurret(
   'turret.fbx',
-  new THREE.Vector3(3, -1.2, 2),
+  new THREE.Vector3(3, -2, 2),
   turretTypes.STANDARD,
   0.005,
   turrets,
@@ -65,7 +73,7 @@ loadAndAddTurret(
 );
 loadAndAddTurret(
   'turret.fbx',
-  new THREE.Vector3(-3, -1.2, 2),
+  new THREE.Vector3(-3, -2, 2),
   turretTypes.HOMING,
   0.005,
   turrets,
@@ -75,7 +83,7 @@ loadAndAddTurret(
 setInterval(
   () => {
     const spawnX = 45;
-    const spawnY = Math.random() * 10 - -7;
+    const spawnY = Math.random() * 12 - -7;
     const enemyZ = 20;
     const position = new CANNON.Vec3(spawnX, spawnY, enemyZ);
     createEnemy(position, world, scene, enemies);
@@ -86,14 +94,34 @@ setInterval(
 
 animate();
 
-
 document.addEventListener('visibilitychange', () => {
   isPageActive = document.visibilityState === 'hidden' ? false : true;
 });
 
+function updateSun() {
+  const phi = THREE.MathUtils.degToRad(90 - parameters.elevation);
+  const theta = THREE.MathUtils.degToRad(parameters.azimuth);
+  const pmremGenerator = new THREE.PMREMGenerator(renderer);
+  const sceneEnv = new THREE.Scene();
+
+  let renderTarget;
+  sun.setFromSphericalCoords(1, phi, theta);
+
+  sky.material.uniforms['sunPosition'].value.copy(sun);
+  water.material.uniforms['sunDirection'].value.copy(sun).normalize();
+
+  if (renderTarget !== undefined) renderTarget.dispose();
+
+  sceneEnv.add(sky);
+  renderTarget = pmremGenerator.fromScene(sceneEnv);
+  scene.add(sky);
+
+  scene.environment = renderTarget.texture;
+}
+
 function init() {
   camera = new THREE.PerspectiveCamera(
-    70,
+    70, // fov
     window.innerWidth / window.innerHeight,
     0.1,
     1000
@@ -104,28 +132,132 @@ function init() {
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1;
+  renderer.setPixelRatio(window.devicePixelRatio);
   document.body.appendChild(renderer.domElement);
 
-  const controls = new OrbitControls(camera, renderer.domElement);
-
-  controls.enableDamping = true;
-  // controls.target.y = 0.01;
-  // controls.enableKeys = true;
-  // controls.listenToKeyEvents(document.body);
-  controls.update();
-  // controls.keys = {
-  //   LEFT: 'ArrowLeft', //left arrow
-  //   UP: 'ArrowUp', // up arrow
-  //   RIGHT: 'ArrowRight', // right arrow
-  //   BOTTOM: 'ArrowDown' // down arrow
-  // };
   document.body.style.cursor = 'none';
 
-  camera.position.set(0, 1, -3);
+  camera.position.set(0, -0.5, -3);
   camera.lookAt(0, 1, 0);
 
   renderer.domElement.addEventListener('mousemove', event => {
     onMouseMove(event, mouse);
+  });
+
+  const waterGeometry = new THREE.PlaneGeometry(10000, 10000);
+
+  sun = new THREE.Vector3();
+
+  water = new Water(waterGeometry, {
+    textureWidth: 512,
+    textureHeight: 512,
+    waterNormals: new THREE.TextureLoader().load(
+      'waternormals.jpg',
+      function (texture) {
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+      }
+    ),
+    sunDirection: new THREE.Vector3(),
+    sunColor: 0xffffff,
+    waterColor: 0x001e0f,
+    distortionScale: 3.7,
+    fog: scene.fog !== undefined
+  });
+
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = -3;
+
+  scene.add(water);
+
+  // Skybox
+
+  sky = new Sky();
+  sky.scale.setScalar(10000);
+  scene.add(sky);
+
+  const skyUniforms = sky.material.uniforms;
+
+  skyUniforms['turbidity'].value = 10;
+  skyUniforms['rayleigh'].value = 2;
+  skyUniforms['mieCoefficient'].value = 0.005;
+  skyUniforms['mieDirectionalG'].value = 0.8;
+
+  updateSun();
+  //
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.maxPolarAngle = Math.PI * 0.6;
+  // controls.target.set(3, 3, 3);
+  controls.minDistance = 2.0;
+  controls.maxDistance = 12.5;
+  // controls.update();
+  //
+  stats = new Stats();
+  document.body.appendChild(stats.dom);
+  animate();
+}
+
+function ui() {
+  const gui = new dat.GUI();
+
+  const folderSky = gui.addFolder('Sky');
+  folderSky.add(parameters, 'elevation', 0, 90, 0.1).onChange(updateSun);
+  folderSky.add(parameters, 'azimuth', -180, 180, 0.1).onChange(updateSun);
+  folderSky.open();
+
+  const waterUniforms = water.material.uniforms;
+
+  const folderWater = gui.addFolder('Water');
+  folderWater
+    .add(waterUniforms.distortionScale, 'value', 0, 8, 0.1)
+    .name('distortionScale');
+  folderWater.add(waterUniforms.size, 'value', 0.1, 10, 0.1).name('size');
+  folderWater.open();
+
+  // ˜˜˜˜˜˜˜˜˜˜˜ ˜˜˜˜˜˜˜˜ UI ˜˜ ID
+  changeTurretType = document.querySelector('#change-turret-button');
+  changeButtonType = document.querySelector('#change-bullet-type-button');
+  changeGravity = document.querySelector('#gravity');
+  resetChangesButton = document.querySelector('#reset-changes');
+  const timeControl = document.querySelector('#timeScaleSlider');
+  const timeValue = document.querySelector('#timeScaleValue');
+
+  changeTurretType.innerText = `Turret type - ${currentBulletType}`;
+  changeButtonType.innerText = `Turret type - ${currentBulletType}`;
+
+  changeGravity.addEventListener('input', event => {
+    gravityValue = new CANNON.Vec3(0, +event.target.value, 0);
+    world.gravity.copy(gravityValue);
+  });
+
+  timeControl.addEventListener('input', event => {
+    updateTimeScale(event.target.value);
+    timeValue.textContent = `${timeScale}`;
+  });
+
+  resetChangesButton.addEventListener('click', event => {
+    gravityValue = new CANNON.Vec3(0, -9.82, 0);
+    world.gravity.copy(gravityValue);
+    changeGravity.value = '';
+  });
+
+  // ˜˜˜˜˜˜˜˜˜ ˜˜˜˜˜˜˜˜˜ ˜˜˜˜ ˜˜˜ ˜˜˜˜˜˜
+  changeTurretType.addEventListener('click', toggleBulletType);
+  changeButtonType.addEventListener('click', toggleBulletType);
+
+  renderer.domElement.addEventListener('click', event => {
+    fire(
+      event,
+      scene,
+      world,
+      fbxModels,
+      currentBulletType,
+      BulletTypes,
+      bullets,
+      mouse,
+      camera
+    );
   });
 }
 
@@ -199,39 +331,38 @@ function ground() {
   const loader = new FBXLoader();
   loader.load('./ground.fbx', fbx => {
     const groundShape = new CANNON.Plane();
-    const groundBody = new CANNON.Body({
-      type: CANNON.Body.STATIC,
+    groundBody = new CANNON.Body({
       mass: 0,
       shape: groundShape
     });
 
-    groundBody.position.set(0, -1.7, 0);
+    groundBody.position.set(0, 0, 0);
     groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 
-    fbx.scale.set(2, 7, 1); // adjust scale of ground 
+    fbx.scale.set(1, 5, 1); // Adjust the scale as needed
     fbx.rotation.set(0, 20.4, 0);
-    fbx.position.set(0, -1.5, 500);
-    world.addBody(groundBody);
+    fbx.position.set(0, -2.5, 500);
 
+    // Add the ground body and mesh to the world and scene
+    world.addBody(groundBody);
     scene.add(fbx);
   });
 }
 
-function sun() {
+function sun1() {
   const sunGeometry = new THREE.SphereGeometry(1, 32, 32);
-  const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); //            
+  const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // ˜˜˜˜˜˜ ˜˜˜˜
   const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
 
-  sunMesh.position.set(0, 50, -20); //                      
+  sunMesh.position.set(0, 50, -20); // ˜˜˜˜˜˜˜ ˜˜˜˜˜˜˜ ˜˜˜˜˜
   scene.add(sunMesh);
 
-  const sunlight = new THREE.DirectionalLight(0xffffff, 1); //                            1
-  sunlight.position.copy(sunMesh.position); //                                       
+  const sunlight = new THREE.DirectionalLight(0xffffff, 1); // ˜˜˜˜ ˜˜˜˜˜ ˜ ˜˜˜˜˜˜˜˜˜˜˜˜˜ 1
+  sunlight.position.copy(sunMesh.position); // ˜˜˜˜˜˜˜ ˜˜˜˜˜ ˜˜˜˜˜˜˜ ˜ ˜˜˜˜˜˜˜˜ ˜˜˜˜˜
   scene.add(sunlight);
 
-  sunlight.color.set('#fff'); //                  
-  sunlight.intensity = 2; //                           
-
+  sunlight.color.set('#fff'); // ˜˜˜˜˜˜ ˜˜˜˜ ˜˜˜˜˜
+  sunlight.intensity = 2; // ˜˜˜˜˜˜ ˜˜˜˜˜˜˜˜˜˜˜˜˜ ˜˜˜˜˜
 
   sunlight.shadow.mapSize.width = 1024;
   sunlight.shadow.mapSize.height = 1024;
@@ -240,12 +371,12 @@ function sun() {
 function createBullet(turret, initialVelocity) {
   const bulletBody = new CANNON.Body({
     mass: 1,
-    shape: new CANNON.Sphere(0.05) //          
+    shape: new CANNON.Sphere(0.05)
   });
 
   const bulletMesh = new THREE.Mesh(
     new THREE.SphereGeometry(0.05),
-    new THREE.MeshBasicMaterial({ color: 0xff0000 }) //         
+    new THREE.MeshBasicMaterial({ color: 0xff0000 })
   );
 
   const cannonPosition = new CANNON.Vec3(
@@ -272,32 +403,16 @@ function createBullet(turret, initialVelocity) {
 }
 
 function createRocket(turret) {
-  const fuel = 20; // liters
+  const fuel = 40; // liters
   let mass = 50;
   if (fuel) mass += fuel;
-
-  rocketFuelStats = document.createElement('p')
-
-  rocketFuelStats.innerText = `fuel in rocket - ${fuel}`
-
-  statsWindow.append(rocketFuelStats)
-
-
-  const directionToNearestEnemy = getDirectionToNearestEnemy( // if direction to nearest is undefined, block
-    rocketBody.position,
-    enemies
-  );
-
-  if (!directionToNearestEnemy) {
-    return;
-  }
 
   // Increase the initial velocity to make the rocket move faster
   const initialVelocity = new CANNON.Vec3(4, 0, 0); // Adjust the values as needed
 
   const rocketBody = new CANNON.Body({
     mass,
-    shape: new CANNON.Box(0.05, 0.05, 0.05) /* new CANNON.Sphere(0.05) */
+    shape: new CANNON.Sphere(0.05)
   });
 
   rocketFuel.set(rocketBody, fuel);
@@ -318,7 +433,7 @@ function createRocket(turret) {
   rocketMesh.position.copy(turret.position);
   rocketMesh.quaternion.copy(turret.quaternion);
 
-  // rocketBody.velocity.copy(initialVelocity); // init velocity, if havent target, dont fire
+  rocketBody.velocity.copy(initialVelocity);
 
   world.addBody(rocketBody);
   rocketsLaunchedCount++;
@@ -371,48 +486,16 @@ function toggleBulletType() {
   changeButtonType.textContent = `Now type bullets - ${currentBulletType}`;
 }
 
-function ui() {
-  const gui = new dat.GUI();
-
-  changeTurretType = document.querySelector('#change-turret-button');
-  changeButtonType = document.querySelector('#change-bullet-type-button');
-  changeGravity = document.querySelector('#gravity');
-  resetChangesButton = document.querySelector('#reset-changes');
-
-  changeTurretType.innerText = `Turret type - ${currentBulletType}`;
-  changeButtonType.innerText = `Turret type - ${currentBulletType}`;
-
-  changeGravity.addEventListener('input', event => {
-    console.log(event.target.value);
-    gravityValue = new CANNON.Vec3(0, +event.target.value, 0);
-    world.gravity.copy(gravityValue);
-  });
-
-  resetChangesButton.addEventListener('click', event => {
-    gravityValue = new CANNON.Vec3(0, -9.82, 0);
-    world.gravity.copy(gravityValue);
-    changeGravity.value = '';
-  });
-
-  changeTurretType.addEventListener('click', toggleBulletType);
-  changeButtonType.addEventListener('click', toggleBulletType);
-
-  renderer.domElement.addEventListener('click', event => {
-    fire(event);
-  });
-
-  const closeControlsButton = gui.domElement.querySelector('.close-button');
-  if (closeControlsButton) {
-    closeControlsButton.style.display = 'none';
-  }
-}
-
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+function updateTimeScale(value) {
+  timeScale = value;
+}
 
 function calculateRotationQuaternion(velocity) {
   // Calculate the rotation quaternion based on the velocity vector
@@ -443,6 +526,27 @@ function getDirectionToNearestEnemy(rocketPosition, enemies) {
   return null;
 }
 
+// Function to check collision with the ground
+function checkCollisionWithGround(objectBody, groundMesh) {
+  // You may need to adjust these values based on your object and ground dimensions
+  const objectRadius = 0.05;
+
+  const objectPosition = objectBody.position.clone();
+  const groundPosition = groundMesh.position.clone();
+  const groundHalfHeight = groundMesh.scale.y / 2; // Adjust for the ground's actual size
+
+  if (
+    objectPosition.x >= groundPosition.x - groundHalfHeight &&
+    objectPosition.x <= groundPosition.x + groundHalfHeight &&
+    objectPosition.z >= groundPosition.z - groundHalfHeight &&
+    objectPosition.z <= groundPosition.z + groundHalfHeight &&
+    objectPosition.y <= groundPosition.y + objectRadius
+  ) {
+    return true; // Collision detected
+  }
+  return false; // No collision
+}
+// updateTimeScale(0.25);
 function animate() {
   requestAnimationFrame(animate);
 
@@ -485,7 +589,14 @@ function animate() {
   });
 
   groundMeshes.forEach(groundMesh => {
-    groundMesh.position.copy(new THREE.Vector3(0, -1.55, 0));
+    groundMesh.position.copy(new THREE.Vector3(0, 0, 0));
+
+    if (checkCollisionWithGround(groundMesh.body, groundMesh)) {
+      scene.remove(groundMesh);
+      world.removeBody(groundMesh.body);
+      groundMesh.body.velocity.set(0, 0, 0);
+      groundMesh.body.angularVelocity.set(0, 0, 0);
+    }
   });
 
   rockets.forEach((rocket, rocketIndex) => {
@@ -512,6 +623,7 @@ function animate() {
     }
 
     if (directionToNearestEnemy) {
+      // Adjust the rocket's velocity based on the direction to the nearest enemy
       rocketBody.velocity.copy(directionToNearestEnemy);
       rocketBody.velocity.normalize();
       rocketBody.velocity.scale(rocketBody.mass, rocketBody.velocity);
@@ -598,7 +710,12 @@ function animate() {
     enemyMesh.quaternion.copy(rotationQuaternion); // Set the new rotation quaternion
   });
 
-  world.fixedStep();
+  const fixedTimeStep = 1 / 165; // Default time step
 
+  const timeStep = fixedTimeStep * timeScale; // Apply the time scale
+
+  water.material.uniforms['time'].value += 0.1 / 165.0;
+  world.step(timeStep); // Update the physics world
+  stats.update();
   renderer.render(scene, camera);
 }
