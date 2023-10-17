@@ -39,28 +39,20 @@ const bulbLuminousPowers = {
   '400 lm (40W)': 400,
   '180 lm (25W)': 180,
   '20 lm (4W)': 20,
-  'Off': 0
+  Off: 0
 };
 
 const hemiLuminousIrradiances = {
-  '0.0001 lx (Moonless Night)': 0.0001,
-  '0.002 lx (Night Airglow)': 0.002,
   '0.5 lx (Full Moon)': 0.5,
   '3.4 lx (City Twilight)': 3.4,
-  '50 lx (Living Room)': 50,
-  '100 lx (Very Overcast)': 100,
-  '350 lx (Office Room)': 350,
-  '400 lx (Sunrise/Sunset)': 400,
-  '1000 lx (Overcast)': 1000,
-  '18000 lx (Daylight)': 18000,
-  '50000 lx (Direct Sun)': 50000
+  '50 lx (Living Room)': 50
 };
 
 const paramsMoon = {
   shadows: true,
   exposure: 0.68,
-  bulbPower: Object.keys( bulbLuminousPowers )[ 4 ],
-  hemiIrradiance: Object.keys( hemiLuminousIrradiances )[ 0 ]
+  bulbPower: Object.keys(bulbLuminousPowers)[4],
+  hemiIrradiance: Object.keys(hemiLuminousIrradiances)[0]
 };
 
 let timeScale = 0.5;
@@ -92,8 +84,6 @@ const fbxModels = [];
 const turrets = [];
 
 const world = new CANNON.World({ gravity: gravityValue });
-
-
 
 init();
 ui();
@@ -147,7 +137,7 @@ function updateSun() {
   if (renderTarget !== undefined) renderTarget.dispose();
 
   // sceneEnv.add(sky);
-  scene.add(sky)
+  scene.add(sky);
   renderTarget = pmremGenerator.fromScene(scene);
   scene.add(sky);
 
@@ -212,19 +202,19 @@ function init() {
   sky.scale.setScalar(450000);
   scene.add(sky);
 
-  sunlight = new THREE.PointLight( 0xffee88, 1, 100, 2 ); //new THREE.DirectionalLight(0xffff00, 1);
+  sunlight = new THREE.PointLight(0xffee88, 1, 100, 2); //new THREE.DirectionalLight(0xffff00, 1);
   scene.add(sunlight);
 
-  sunlight.color.set('#f5f3e6'); 
-  sunlight.intensity = 222; 
-  bulbLight = new THREE.PointLight( 0xffee88, 1, 100, 2 );
+  sunlight.color.set('#f5f3e6');
+  sunlight.intensity = 222;
+  bulbLight = new THREE.PointLight(0xffee88, 1, 100, 2);
 
-  bulbLight.position.set( 10, 2, 0 );
+  bulbLight.position.set(10, 2, 0);
   bulbLight.castShadow = true;
-  scene.add( bulbLight );
+  scene.add(bulbLight);
 
-  hemiLight = new THREE.HemisphereLight( 0xddeeff, 0x0f0e0d, 0.02 );
-  scene.add( hemiLight );
+  hemiLight = new THREE.HemisphereLight(0xddeeff, 0x0f0e0d, 0.02);
+  scene.add(hemiLight);
 
   sunlight.shadow.mapSize.width = 1024;
   sunlight.shadow.mapSize.height = 1024;
@@ -235,7 +225,7 @@ function init() {
   skyUniforms['rayleigh'].value = 2;
   skyUniforms['mieCoefficient'].value = 0.005;
   skyUniforms['mieDirectionalG'].value = 0.8;
-  skyUniforms['sunPosition'].value.copy(sun)
+  skyUniforms['sunPosition'].value.copy(sun);
 
   updateSun();
   //
@@ -248,27 +238,39 @@ function init() {
   //
   stats = new Stats();
   document.body.appendChild(stats.dom);
+  paramsMoon.hemiIrradiance = Object.keys(hemiLuminousIrradiances)[1];
   renderer.shadowMap.enabled = true;
   animate();
 }
 
 function handleMode() {
-  isNightMode = !isNightMode
-  toggleNightMode()
+  isNightMode = !isNightMode;
+  toggleNightMode();
 }
 
 function toggleNightMode() {
-  if(isNightMode) {
-    const skyUniforms = sky.material.uniforms;
+  // isNightMode = !isNightMode;
 
-    sunlight.color.set('#5e5d57')
-    skyUniforms['rayleigh'].value = -90
-    parameters.elevation = -90
+  if (isNightMode) {
+    const skyUniforms = sky.material.uniforms;
+    sunlight.color.set('#5e5d57');
+    skyUniforms['rayleigh'].value = -90;
+    skyUniforms['mieCoefficient'].value = 0.005;
+    skyUniforms['mieDirectionalG'].value = 0.8;
+    bulbLight.position.set(10, 2, 0);
+    bulbLight.castShadow = true;
+    bulbLight.intensity = 222;
+    parameters.elevation = -90;
+    paramsMoon.hemiIrradiance = Object.keys(hemiLuminousIrradiances)[0];
   } else {
     const skyUniforms = sky.material.uniforms;
+    sunlight.color.set('#f5f3e6');
+    skyUniforms['turbidity'].value = 50;
+    skyUniforms['rayleigh'].value = 3;
+    parameters.elevation = 3;
 
-    skyUniforms['rayleigh'].value = 2
-    parameters.elevation = 2
+    // Set hemiLuminousIrradiance to 3.4
+    paramsMoon.hemiIrradiance = Object.keys(hemiLuminousIrradiances)[1];
   }
 }
 
@@ -280,12 +282,16 @@ function ui() {
   folderSky.add(parameters, 'azimuth', -180, 180, 0.1).onChange(updateSun);
   folderSky.open();
 
-  const folderSun = gui.addFolder('Sun')
+  const folderSun = gui.addFolder('Sun');
 
-  folderSun.add( paramsMoon, 'hemiIrradiance', Object.keys( hemiLuminousIrradiances ) );
-  folderSun.add( paramsMoon, 'bulbPower', Object.keys( bulbLuminousPowers ) );
-  folderSun.add( paramsMoon, 'exposure', 0, 1 );
-  folderSun.add( paramsMoon, 'shadows' );
+  folderSun.add(
+    paramsMoon,
+    'hemiIrradiance',
+    Object.keys(hemiLuminousIrradiances)
+  );
+  folderSun.add(paramsMoon, 'bulbPower', Object.keys(bulbLuminousPowers));
+  folderSun.add(paramsMoon, 'exposure', 0, 1);
+  folderSun.add(paramsMoon, 'shadows');
   folderSun.open();
 
   const waterUniforms = water.material.uniforms;
@@ -324,8 +330,7 @@ function ui() {
     changeGravity.value = '';
   });
 
-
-  nightMode.addEventListener('click', handleMode)
+  nightMode.addEventListener('click', handleMode);
   changeTurretType.addEventListener('click', toggleBulletType);
   changeButtonType.addEventListener('click', toggleBulletType);
 
@@ -773,7 +778,6 @@ function animate() {
     // Update rotation quaternion based on velocity
     const rotationQuaternion = calculateRotationQuaternion(enemyBody.velocity);
 
-    
     enemyMesh.position.copy(enemyBody.position);
     enemyMesh.quaternion.copy(rotationQuaternion); // Set the new rotation quaternion
   });
@@ -782,13 +786,13 @@ function animate() {
 
   const timeStep = fixedTimeStep * timeScale; // Apply the time scale
 
-  bulbLight.power = bulbLuminousPowers[ paramsMoon.bulbPower ];
-	// bulbMat.emissiveIntensity = bulbLight.intensity / Math.pow( 0.02, 2.0 ); // convert from intensity to irradiance at bulb surface
+  bulbLight.power = bulbLuminousPowers[paramsMoon.bulbPower];
+  // bulbMat.emissiveIntensity = bulbLight.intensity / Math.pow( 0.02, 2.0 ); // convert from intensity to irradiance at bulb surface
 
-	hemiLight.intensity = hemiLuminousIrradiances[ paramsMoon.hemiIrradiance ];
+  hemiLight.intensity = hemiLuminousIrradiances[paramsMoon.hemiIrradiance];
 
   water.material.uniforms['time'].value += 0.1 / 245.0;
-  world.step(timeStep) // Update the physics world
+  world.step(timeStep); // Update the physics world
   stats.update();
   renderer.render(scene, camera);
 }
