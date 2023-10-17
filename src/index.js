@@ -63,6 +63,8 @@ const rockets = [];
 const groundMeshes = [];
 const turretRotationAngles = [];
 let isNightMode = false;
+let manualRocket;
+let rocketStrength, rocketStrengthInput, rocketMass, rocketMassInput;
 
 const BulletTypes = {
   STANDARD: 'Standard',
@@ -249,8 +251,6 @@ function handleMode() {
 }
 
 function toggleNightMode() {
-  // isNightMode = !isNightMode;
-
   if (isNightMode) {
     const skyUniforms = sky.material.uniforms;
     sunlight.color.set('#5e5d57');
@@ -272,6 +272,30 @@ function toggleNightMode() {
     // Set hemiLuminousIrradiance to 3.4
     paramsMoon.hemiIrradiance = Object.keys(hemiLuminousIrradiances)[1];
   }
+}
+
+function handleRocket(event) {
+  document.body.style.cursor = 'pointer';
+  let currentDotIndex = 1;
+  document.addEventListener('mousedown', event => {
+    if (currentDotIndex <= 3) {
+      const dot = document.getElementById(`dot${currentDotIndex}`);
+      const mouseX = event.clientX;
+      const mouseY = event.clientY;
+
+      // Set the dot's position to the mouse click position
+      dot.style.left = `${mouseX - 5}px`; // Adjust for dot size
+      dot.style.top = `${mouseY - 5}px`; // Adjust for dot size
+
+      // Increment the dot index
+      currentDotIndex++;
+
+      // Check if all dots have been placed
+      if (currentDotIndex > 3) {
+        // All dots placed, you can perform any necessary actions here
+      }
+    }
+  });
 }
 
 function ui() {
@@ -307,12 +331,23 @@ function ui() {
   changeButtonType = document.querySelector('#change-bullet-type-button');
   changeGravity = document.querySelector('#gravity');
   nightMode = document.querySelector('.nightMode');
+  manualRocket = document.querySelector('.manualRocket');
   resetChangesButton = document.querySelector('#reset-changes');
+  rocketStrength = document.querySelector('.rocketStrength');
+  rocketMass = document.querySelector('.rocketMass');
   const timeControl = document.querySelector('#timeScaleSlider');
   const timeValue = document.querySelector('#timeScaleValue');
 
   changeTurretType.innerText = `Turret type - ${currentBulletType}`;
   changeButtonType.innerText = `Turret type - ${currentBulletType}`;
+
+  rocketStrength.addEventListener('input', event => {
+    rocketStrengthInput = event.target.value;
+  });
+
+  rocketMass.addEventListener('input', event => {
+    rocketMassInput = event.target.value;
+  });
 
   changeGravity.addEventListener('input', event => {
     gravityValue = new CANNON.Vec3(0, +event.target.value, 0);
@@ -328,11 +363,19 @@ function ui() {
     gravityValue = new CANNON.Vec3(0, -9.82, 0);
     world.gravity.copy(gravityValue);
     changeGravity.value = '';
+    changeGravity.value = '-9.82';
+    timeScale = 1;
+    timeValue.textContent = `${timeScale}`;
+    rocketMassInput = '';
+    rocketStrengthInput = '';
+    rocketMass = 100;
+    rocketStrength = 73000;
   });
 
   nightMode.addEventListener('click', handleMode);
   changeTurretType.addEventListener('click', toggleBulletType);
   changeButtonType.addEventListener('click', toggleBulletType);
+  manualRocket.addEventListener('click', handleRocket);
 
   renderer.domElement.addEventListener('click', event => {
     fire(
@@ -396,7 +439,7 @@ function createEnemy(position) {
   loader.load('rocket.fbx', fbx => {
     const targetShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5));
     const targetBody = new CANNON.Body({
-      mass: 100,
+      mass: +rocketMassInput || 100, // CAN BE CHANGED BY PLAYER
       shape: targetShape,
       position,
       linearFactor: new CANNON.Vec3(1, 0.03, 0)
@@ -404,7 +447,7 @@ function createEnemy(position) {
     world.addBody(targetBody);
 
     const dt = 1 / 60;
-    const strength = 73000;
+    const strength = +rocketStrengthInput || 73000; // CAN BE CHANGED BY PLAYER
 
     fbx.scale.set(0.005, 0.005, 0.005);
 
@@ -412,6 +455,14 @@ function createEnemy(position) {
 
     targetBody.applyImpulse(impulse);
     scene.add(fbx);
+
+    setInterval(() => {
+      // delete enemy after 5 seconds
+      world.removeBody(targetBody);
+      scene.remove(fbx);
+
+      // enemies = enemies.filter(enemy => enemy.body !== targetBody);
+    }, 30000);
 
     enemies.push({ body: targetBody, mesh: fbx });
   });
@@ -441,7 +492,7 @@ function ground() {
 
 function createBullet(turret, initialVelocity) {
   const bulletBody = new CANNON.Body({
-    mass: 1,
+    mass: 104040,
     shape: new CANNON.Sphere(0.05)
   });
 
@@ -450,22 +501,8 @@ function createBullet(turret, initialVelocity) {
     new THREE.MeshBasicMaterial({ color: 0xff0000 })
   );
 
-  const cannonPosition = new CANNON.Vec3(
-    turret.position.x,
-    turret.position.y,
-    turret.position.z
-  );
-
-  bulletBody.position.copy(cannonPosition);
-
-  bulletMesh.position.copy(turret.position);
-  bulletMesh.quaternion.copy(turret.quaternion);
-
-  bulletBody.velocity.set(
-    initialVelocity.x,
-    initialVelocity.y,
-    initialVelocity.z
-  );
+  bulletBody.position.copy(turret.position);
+  bulletBody.velocity.copy(initialVelocity);
 
   bulletsFiredCount++;
   bulletsFired.textContent = `Bullets Fired: ${bulletsFiredCount}`;
@@ -474,12 +511,12 @@ function createBullet(turret, initialVelocity) {
 }
 
 function createRocket(turret) {
-  const fuel = 40; // liters
-  let mass = 50;
+  const fuel = 60; // liters
+  let mass = 20; // kg
   if (fuel) mass += fuel;
 
   // Increase the initial velocity to make the rocket move faster
-  const initialVelocity = new CANNON.Vec3(4, 0, 0); // Adjust the values as needed
+  const initialVelocity = new CANNON.Vec3(1, 0, 0); // Adjust the values as needed
 
   const rocketBody = new CANNON.Body({
     mass,
@@ -516,7 +553,7 @@ function createRocket(turret) {
 function fire(event) {
   const turret = fbxModels[0];
   const secondTurret = fbxModels[1];
-  const muzzleVelocity = 60;
+  const muzzleVelocity = 120;
 
   const mouseDirection = new THREE.Vector3(
     (event.clientX / window.innerWidth) * 2 - 1,
@@ -618,7 +655,7 @@ function checkCollisionWithGround(objectBody, groundMesh) {
   return false; // No collision
 }
 
-// updateTimeScale(0.25);
+// updateTimeScale(0.1);
 function animate() {
   requestAnimationFrame(animate);
 
@@ -787,7 +824,6 @@ function animate() {
   const timeStep = fixedTimeStep * timeScale; // Apply the time scale
 
   bulbLight.power = bulbLuminousPowers[paramsMoon.bulbPower];
-  // bulbMat.emissiveIntensity = bulbLight.intensity / Math.pow( 0.02, 2.0 ); // convert from intensity to irradiance at bulb surface
 
   hemiLight.intensity = hemiLuminousIrradiances[paramsMoon.hemiIrradiance];
 
