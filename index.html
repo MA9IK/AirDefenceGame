@@ -31,6 +31,7 @@
           value="1.0" />
         <span id="timeScaleValue">1.0</span>
       </div>
+      <button class="nightMode">Night mode</button>
     </div>
   </body>
 
@@ -39,6 +40,25 @@
       margin: 0;
       padding: 0;
     }
+
+    select {
+    padding: 2px;
+    font-size: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #f2f2f2;
+    color: #333;
+    outline: none;
+  }
+
+  select:hover, select:focus {
+    border-color: #000000;
+  }
+
+  select option {
+    background-color: #fff;
+    color: #333;
+  }
 
     #add-rocket-launch,
     #reset-changes {
@@ -93,6 +113,7 @@
       display: grid;
       grid-template-columns: 1fr;
       background: rgba(255, 255, 255, 0.7);
+      margin-left: 100px;
       gap: 10px;
     }
 

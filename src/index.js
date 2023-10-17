@@ -22,6 +22,7 @@ let renderer;
 let isPageActive = true;
 let changeTurretType;
 let changeButtonType;
+let sunlight, light, hemiLight, bulbLight;
 const bulletsFired = document.querySelector('.firedBullets');
 const rocketLaunched = document.querySelector('.rocketsLaunched');
 const enemiesKilled = document.querySelector('.enemiesKilled');
@@ -30,13 +31,46 @@ let rocketsLaunchedCount = 0;
 let enemiesKilledCount = 0;
 const rocketFuel = new Map();
 
+const bulbLuminousPowers = {
+  '110000 lm (1000W)': 110000,
+  '3500 lm (300W)': 3500,
+  '1700 lm (100W)': 1700,
+  '800 lm (60W)': 800,
+  '400 lm (40W)': 400,
+  '180 lm (25W)': 180,
+  '20 lm (4W)': 20,
+  'Off': 0
+};
+
+const hemiLuminousIrradiances = {
+  '0.0001 lx (Moonless Night)': 0.0001,
+  '0.002 lx (Night Airglow)': 0.002,
+  '0.5 lx (Full Moon)': 0.5,
+  '3.4 lx (City Twilight)': 3.4,
+  '50 lx (Living Room)': 50,
+  '100 lx (Very Overcast)': 100,
+  '350 lx (Office Room)': 350,
+  '400 lx (Sunrise/Sunset)': 400,
+  '1000 lx (Overcast)': 1000,
+  '18000 lx (Daylight)': 18000,
+  '50000 lx (Direct Sun)': 50000
+};
+
+const paramsMoon = {
+  shadows: true,
+  exposure: 0.68,
+  bulbPower: Object.keys( bulbLuminousPowers )[ 4 ],
+  hemiIrradiance: Object.keys( hemiLuminousIrradiances )[ 0 ]
+};
+
 let timeScale = 0.5;
 
-let sun, sky, water;
+let sun, sky, water, nightMode;
 const bullets = [];
 const rockets = [];
 const groundMeshes = [];
 const turretRotationAngles = [];
+let isNightMode = false;
 
 const BulletTypes = {
   STANDARD: 'Standard',
@@ -59,10 +93,11 @@ const turrets = [];
 
 const world = new CANNON.World({ gravity: gravityValue });
 
+
+
 init();
 ui();
 ground(scene, world);
-sun1();
 loadAndAddTurret(
   'turret.fbx',
   new THREE.Vector3(3, -2, 2),
@@ -102,9 +137,8 @@ function updateSun() {
   const phi = THREE.MathUtils.degToRad(90 - parameters.elevation);
   const theta = THREE.MathUtils.degToRad(parameters.azimuth);
   const pmremGenerator = new THREE.PMREMGenerator(renderer);
-  const sceneEnv = new THREE.Scene();
-
   let renderTarget;
+
   sun.setFromSphericalCoords(1, phi, theta);
 
   sky.material.uniforms['sunPosition'].value.copy(sun);
@@ -112,8 +146,9 @@ function updateSun() {
 
   if (renderTarget !== undefined) renderTarget.dispose();
 
-  sceneEnv.add(sky);
-  renderTarget = pmremGenerator.fromScene(sceneEnv);
+  // sceneEnv.add(sky);
+  scene.add(sky)
+  renderTarget = pmremGenerator.fromScene(scene);
   scene.add(sky);
 
   scene.environment = renderTarget.texture;
@@ -174,8 +209,25 @@ function init() {
   // Skybox
 
   sky = new Sky();
-  sky.scale.setScalar(10000);
+  sky.scale.setScalar(450000);
   scene.add(sky);
+
+  sunlight = new THREE.PointLight( 0xffee88, 1, 100, 2 ); //new THREE.DirectionalLight(0xffff00, 1);
+  scene.add(sunlight);
+
+  sunlight.color.set('#f5f3e6'); 
+  sunlight.intensity = 222; 
+  bulbLight = new THREE.PointLight( 0xffee88, 1, 100, 2 );
+
+  bulbLight.position.set( 10, 2, 0 );
+  bulbLight.castShadow = true;
+  scene.add( bulbLight );
+
+  hemiLight = new THREE.HemisphereLight( 0xddeeff, 0x0f0e0d, 0.02 );
+  scene.add( hemiLight );
+
+  sunlight.shadow.mapSize.width = 1024;
+  sunlight.shadow.mapSize.height = 1024;
 
   const skyUniforms = sky.material.uniforms;
 
@@ -183,6 +235,7 @@ function init() {
   skyUniforms['rayleigh'].value = 2;
   skyUniforms['mieCoefficient'].value = 0.005;
   skyUniforms['mieDirectionalG'].value = 0.8;
+  skyUniforms['sunPosition'].value.copy(sun)
 
   updateSun();
   //
@@ -195,16 +248,45 @@ function init() {
   //
   stats = new Stats();
   document.body.appendChild(stats.dom);
+  renderer.shadowMap.enabled = true;
   animate();
+}
+
+function handleMode() {
+  isNightMode = !isNightMode
+  toggleNightMode()
+}
+
+function toggleNightMode() {
+  if(isNightMode) {
+    const skyUniforms = sky.material.uniforms;
+
+    sunlight.color.set('#5e5d57')
+    skyUniforms['rayleigh'].value = -90
+    parameters.elevation = -90
+  } else {
+    const skyUniforms = sky.material.uniforms;
+
+    skyUniforms['rayleigh'].value = 2
+    parameters.elevation = 2
+  }
 }
 
 function ui() {
   const gui = new dat.GUI();
 
   const folderSky = gui.addFolder('Sky');
-  folderSky.add(parameters, 'elevation', 0, 90, 0.1).onChange(updateSun);
+  folderSky.add(parameters, 'elevation', -90, 90, 0.1).onChange(updateSun);
   folderSky.add(parameters, 'azimuth', -180, 180, 0.1).onChange(updateSun);
   folderSky.open();
+
+  const folderSun = gui.addFolder('Sun')
+
+  folderSun.add( paramsMoon, 'hemiIrradiance', Object.keys( hemiLuminousIrradiances ) );
+  folderSun.add( paramsMoon, 'bulbPower', Object.keys( bulbLuminousPowers ) );
+  folderSun.add( paramsMoon, 'exposure', 0, 1 );
+  folderSun.add( paramsMoon, 'shadows' );
+  folderSun.open();
 
   const waterUniforms = water.material.uniforms;
 
@@ -215,10 +297,10 @@ function ui() {
   folderWater.add(waterUniforms.size, 'value', 0.1, 10, 0.1).name('size');
   folderWater.open();
 
-  // ˜˜˜˜˜˜˜˜˜˜˜ ˜˜˜˜˜˜˜˜ UI ˜˜ ID
   changeTurretType = document.querySelector('#change-turret-button');
   changeButtonType = document.querySelector('#change-bullet-type-button');
   changeGravity = document.querySelector('#gravity');
+  nightMode = document.querySelector('.nightMode');
   resetChangesButton = document.querySelector('#reset-changes');
   const timeControl = document.querySelector('#timeScaleSlider');
   const timeValue = document.querySelector('#timeScaleValue');
@@ -242,7 +324,8 @@ function ui() {
     changeGravity.value = '';
   });
 
-  // ˜˜˜˜˜˜˜˜˜ ˜˜˜˜˜˜˜˜˜ ˜˜˜˜ ˜˜˜ ˜˜˜˜˜˜
+
+  nightMode.addEventListener('click', handleMode)
   changeTurretType.addEventListener('click', toggleBulletType);
   changeButtonType.addEventListener('click', toggleBulletType);
 
@@ -261,7 +344,9 @@ function ui() {
   });
 }
 
-function loadAndAddTurret(modelPath, position, type, scale, name) {
+// loadAndAddTurret('villa.fbx', new THREE.Vector3(0, 0, 0), 'house', 0.005)
+
+function loadAndAddTurret(modelPath, position, type, scale) {
   const loader = new FBXLoader();
 
   loader.load(modelPath, fbx => {
@@ -347,25 +432,6 @@ function ground() {
     world.addBody(groundBody);
     scene.add(fbx);
   });
-}
-
-function sun1() {
-  const sunGeometry = new THREE.SphereGeometry(1, 32, 32);
-  const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // ˜˜˜˜˜˜ ˜˜˜˜
-  const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
-
-  sunMesh.position.set(0, 50, -20); // ˜˜˜˜˜˜˜ ˜˜˜˜˜˜˜ ˜˜˜˜˜
-  scene.add(sunMesh);
-
-  const sunlight = new THREE.DirectionalLight(0xffffff, 1); // ˜˜˜˜ ˜˜˜˜˜ ˜ ˜˜˜˜˜˜˜˜˜˜˜˜˜ 1
-  sunlight.position.copy(sunMesh.position); // ˜˜˜˜˜˜˜ ˜˜˜˜˜ ˜˜˜˜˜˜˜ ˜ ˜˜˜˜˜˜˜˜ ˜˜˜˜˜
-  scene.add(sunlight);
-
-  sunlight.color.set('#fff'); // ˜˜˜˜˜˜ ˜˜˜˜ ˜˜˜˜˜
-  sunlight.intensity = 2; // ˜˜˜˜˜˜ ˜˜˜˜˜˜˜˜˜˜˜˜˜ ˜˜˜˜˜
-
-  sunlight.shadow.mapSize.width = 1024;
-  sunlight.shadow.mapSize.height = 1024;
 }
 
 function createBullet(turret, initialVelocity) {
@@ -546,6 +612,7 @@ function checkCollisionWithGround(objectBody, groundMesh) {
   }
   return false; // No collision
 }
+
 // updateTimeScale(0.25);
 function animate() {
   requestAnimationFrame(animate);
@@ -706,16 +773,22 @@ function animate() {
     // Update rotation quaternion based on velocity
     const rotationQuaternion = calculateRotationQuaternion(enemyBody.velocity);
 
+    
     enemyMesh.position.copy(enemyBody.position);
     enemyMesh.quaternion.copy(rotationQuaternion); // Set the new rotation quaternion
   });
 
-  const fixedTimeStep = 1 / 165; // Default time step
+  const fixedTimeStep = 1 / 245; // Default time step
 
   const timeStep = fixedTimeStep * timeScale; // Apply the time scale
 
-  water.material.uniforms['time'].value += 0.1 / 165.0;
-  world.step(timeStep); // Update the physics world
+  bulbLight.power = bulbLuminousPowers[ paramsMoon.bulbPower ];
+	// bulbMat.emissiveIntensity = bulbLight.intensity / Math.pow( 0.02, 2.0 ); // convert from intensity to irradiance at bulb surface
+
+	hemiLight.intensity = hemiLuminousIrradiances[ paramsMoon.hemiIrradiance ];
+
+  water.material.uniforms['time'].value += 0.1 / 245.0;
+  world.step(timeStep) // Update the physics world
   stats.update();
   renderer.render(scene, camera);
 }
