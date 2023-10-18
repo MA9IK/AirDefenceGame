@@ -13,6 +13,7 @@ const parameters = {
 import { Sky } from 'three/addons/objects/Sky.js';
 import { Water } from 'three/addons/objects/Water.js';
 import Stats from 'three/addons/libs/stats.module.js';
+import { update } from 'tween.js';
 
 const mouse = new THREE.Vector2();
 
@@ -78,6 +79,9 @@ let currentBullet = BulletTypes.STANDARD;
 let currentBulletType = BulletTypes.STANDARD;
 let changeGravity;
 let resetChangesButton;
+let fpsValue = 0;
+let frameTimes = [];
+let prevTime = performance.now();
 
 let gravityValue = new CANNON.Vec3(0, -9.82, 0);
 
@@ -446,12 +450,12 @@ function createEnemy(position) {
     });
     world.addBody(targetBody);
 
-    const dt = 1 / 60;
-    const strength = +rocketStrengthInput || 73000; // CAN BE CHANGED BY PLAYER
+    // const dt = 1 / fpsValue;
+    const strength = +rocketStrengthInput || 30000  // CAN BE CHANGED BY PLAYER
 
     fbx.scale.set(0.005, 0.005, 0.005);
 
-    const impulse = new CANNON.Vec3(-strength * dt, 0, 0);
+    const impulse = new CANNON.Vec3(-strength, 0, 0);
 
     targetBody.applyImpulse(impulse);
     scene.add(fbx);
@@ -460,11 +464,17 @@ function createEnemy(position) {
       // delete enemy after 5 seconds
       world.removeBody(targetBody);
       scene.remove(fbx);
-
-      // enemies = enemies.filter(enemy => enemy.body !== targetBody);
     }, 30000);
 
     enemies.push({ body: targetBody, mesh: fbx });
+
+    const updateEnemy = () => {
+      const dt = 1 / fpsValue; // Calculate delta time based on FPS
+      targetBody.applyImpulse(impulse.scale(dt)); // Scale impulse by delta time
+    };
+
+    // Call updateEnemy in your animation loop to move the enemy
+    updateEnemy()
   });
 }
 
@@ -492,8 +502,9 @@ function ground() {
 
 function createBullet(turret, initialVelocity) {
   const bulletBody = new CANNON.Body({
-    mass: 104040,
-    shape: new CANNON.Sphere(0.05)
+    mass: 10404,
+    shape: new CANNON.Sphere(0.05),
+    linearFactor: new CANNON.Vec3(1, -0.1, 0)
   });
 
   const bulletMesh = new THREE.Mesh(
@@ -656,7 +667,7 @@ function checkCollisionWithGround(objectBody, groundMesh) {
 }
 
 // updateTimeScale(0.1);
-function animate() {
+function animate(callback) {
   requestAnimationFrame(animate);
 
   fbxModels.forEach((item, index) => {
@@ -829,6 +840,17 @@ function animate() {
 
   water.material.uniforms['time'].value += 0.1 / 245.0;
   world.step(timeStep); // Update the physics world
+
+  let currentTime = performance.now();
+  let frameTime = currentTime - prevTime;
+  prevTime = currentTime;
+
+  // Store the frame time in an array
+  frameTimes.push(frameTime);
+
+  // Calculate the average frame time over the last 60 frames
+  let totalFrameTime = frameTimes.reduce((a, b) => a + b, 0);
+  fpsValue = 1000 / (totalFrameTime / frameTimes.length); // Calculate FPS
   stats.update();
   renderer.render(scene, camera);
 }
