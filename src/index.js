@@ -13,7 +13,6 @@ const parameters = {
 import { Sky } from 'three/addons/objects/Sky.js';
 import { Water } from 'three/addons/objects/Water.js';
 import Stats from 'three/addons/libs/stats.module.js';
-import { update } from 'tween.js';
 
 const mouse = new THREE.Vector2();
 
@@ -64,8 +63,10 @@ const rockets = [];
 const groundMeshes = [];
 const turretRotationAngles = [];
 let isNightMode = false;
-let manualRocket;
 let rocketStrength, rocketStrengthInput, rocketMass, rocketMassInput;
+
+const radarCanvas = document.getElementById('radarCanvas');
+const radarContext = radarCanvas.getContext('2d');
 
 const BulletTypes = {
   STANDARD: 'Standard',
@@ -110,23 +111,18 @@ loadAndAddTurret(
   turrets,
   fbxModels
 );
-
-setInterval(
-  () => {
-    const spawnX = 45;
-    const spawnY = Math.random() * 12 - -7;
-    const enemyZ = 20;
-    const position = new CANNON.Vec3(spawnX, spawnY, enemyZ);
-    createEnemy(position, world, scene, enemies);
-  },
-  Math.random() * 3000 + 6000
-  // 1000
-);
-
 animate();
 
-document.addEventListener('visibilitychange', () => {
-  isPageActive = document.visibilityState === 'hidden' ? false : true;
+document.addEventListener('visibilitychange', event => {
+  console.log(document.visibilityState);
+  if (document.visibilityState === 'hidden') {
+    // Page is hidden, pause the game
+    isPageActive = false;
+  } else {
+    // Page is visible, resume the game
+    isPageActive = true;
+    animate(); // Resume the animation loop
+  }
 });
 
 function updateSun() {
@@ -278,30 +274,6 @@ function toggleNightMode() {
   }
 }
 
-function handleRocket(event) {
-  document.body.style.cursor = 'pointer';
-  let currentDotIndex = 1;
-  document.addEventListener('mousedown', event => {
-    if (currentDotIndex <= 3) {
-      const dot = document.getElementById(`dot${currentDotIndex}`);
-      const mouseX = event.clientX;
-      const mouseY = event.clientY;
-
-      // Set the dot's position to the mouse click position
-      dot.style.left = `${mouseX - 5}px`; // Adjust for dot size
-      dot.style.top = `${mouseY - 5}px`; // Adjust for dot size
-
-      // Increment the dot index
-      currentDotIndex++;
-
-      // Check if all dots have been placed
-      if (currentDotIndex > 3) {
-        // All dots placed, you can perform any necessary actions here
-      }
-    }
-  });
-}
-
 function ui() {
   const gui = new dat.GUI();
 
@@ -335,7 +307,6 @@ function ui() {
   changeButtonType = document.querySelector('#change-bullet-type-button');
   changeGravity = document.querySelector('#gravity');
   nightMode = document.querySelector('.nightMode');
-  manualRocket = document.querySelector('.manualRocket');
   resetChangesButton = document.querySelector('#reset-changes');
   rocketStrength = document.querySelector('.rocketStrength');
   rocketMass = document.querySelector('.rocketMass');
@@ -379,7 +350,6 @@ function ui() {
   nightMode.addEventListener('click', handleMode);
   changeTurretType.addEventListener('click', toggleBulletType);
   changeButtonType.addEventListener('click', toggleBulletType);
-  manualRocket.addEventListener('click', handleRocket);
 
   renderer.domElement.addEventListener('click', event => {
     fire(
@@ -393,6 +363,20 @@ function ui() {
       mouse,
       camera
     );
+  });
+}
+
+function updateRadar(enemies) {
+  radarContext.clearRect(0, 0, radarCanvas.width, radarCanvas.height);
+  const centerX = radarCanvas.width / 2;
+  const centerY = radarCanvas.height / 2;
+
+  // Update radar
+  enemies.forEach(rocket => {
+    const x = centerX + rocket.mesh.position.x; // Adjust as needed
+    const y = centerY + rocket.mesh.position.z; // Adjust as needed
+    radarContext.fillStyle = 'red';
+    radarContext.fillRect(x, y, 2, 2); // Display rockets as small red squares
   });
 }
 
@@ -443,7 +427,7 @@ function createEnemy(position) {
   loader.load('rocket.fbx', fbx => {
     const targetShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5));
     const targetBody = new CANNON.Body({
-      mass: +rocketMassInput || 100, // CAN BE CHANGED BY PLAYER
+      mass: +rocketMassInput || 200, // CAN BE CHANGED BY PLAYER
       shape: targetShape,
       position,
       linearFactor: new CANNON.Vec3(1, 0.03, 0)
@@ -451,7 +435,7 @@ function createEnemy(position) {
     world.addBody(targetBody);
 
     // const dt = 1 / fpsValue;
-    const strength = +rocketStrengthInput || 30000  // CAN BE CHANGED BY PLAYER
+    const strength = +rocketStrengthInput || 5000; // CAN BE CHANGED BY PLAYER
 
     fbx.scale.set(0.005, 0.005, 0.005);
 
@@ -474,8 +458,44 @@ function createEnemy(position) {
     };
 
     // Call updateEnemy in your animation loop to move the enemy
-    updateEnemy()
+    updateEnemy();
   });
+}
+
+function spawnEnemies() {
+  const spawnEnemyInterval = Math.random() * 3000 + 6000;
+
+  let spawnIntervalId = setInterval(() => {
+    if (isPageActive) {
+      const spawnX = 45;
+      const spawnY = Math.random() * 12 - -7;
+      const enemyZ = 20;
+      const position = new CANNON.Vec3(spawnX, spawnY, enemyZ);
+      createEnemy(position, world, scene, enemies);
+    }
+  }, spawnEnemyInterval);
+
+  // Clear the interval when the page is hidden
+  document.addEventListener('visibilitychange', event => {
+    if (document.visibilityState === 'hidden') {
+      clearInterval(spawnIntervalId);
+    } else {
+      // Page is visible, resume the spawning
+      const newSpawnInterval = Math.random() * 3000 + 6000;
+      spawnIntervalId = setInterval(() => {
+        const spawnX = 45;
+        const spawnY = Math.random() * 12 - -7;
+        const enemyZ = 20;
+        const position = new CANNON.Vec3(spawnX, spawnY, enemyZ);
+        createEnemy(position, world, scene, enemies);
+      }, newSpawnInterval);
+    }
+  });
+}
+
+// Call spawnEnemies when the page is initially visible
+if (document.visibilityState !== 'hidden') {
+  spawnEnemies();
 }
 
 function ground() {
@@ -527,7 +547,7 @@ function createRocket(turret) {
   if (fuel) mass += fuel;
 
   // Increase the initial velocity to make the rocket move faster
-  const initialVelocity = new CANNON.Vec3(1, 0, 0); // Adjust the values as needed
+  const initialVelocity = new CANNON.Vec3(4, 0, 0); // Adjust the values as needed
 
   const rocketBody = new CANNON.Body({
     mass,
@@ -546,7 +566,6 @@ function createRocket(turret) {
     turret.position.y,
     turret.position.z
   );
-
   rocketBody.position.copy(cannonPosition);
 
   rocketMesh.position.copy(turret.position);
@@ -667,7 +686,11 @@ function checkCollisionWithGround(objectBody, groundMesh) {
 }
 
 // updateTimeScale(0.1);
-function animate(callback) {
+function animate() {
+  if (document.visibilityState === 'hidden') {
+    return;
+  }
+
   requestAnimationFrame(animate);
 
   fbxModels.forEach((item, index) => {
@@ -753,31 +776,32 @@ function animate(callback) {
     rocketMesh.quaternion.copy(rocketBody.quaternion);
 
     // Check for collisions with enemies
-    for (let enemyIndex = enemies.length - 1; enemyIndex >= 0; enemyIndex--) {
-      const enemy = enemies[enemyIndex];
-      const enemyBody = enemy.body;
-      const enemyMesh = enemy.mesh;
+    for (let i = rockets.length - 1; i >= 0; i--) {
+      const rocket = rockets[i];
+      const rocketBody = rocket.body;
 
-      // Calculate the distance between the rocket and enemy
-      const distance = rocketBody.position.distanceTo(enemyBody.position);
+      for (let j = enemies.length - 1; j >= 0; j--) {
+        const enemy = enemies[j];
+        const enemyBody = enemy.body;
 
-      // Assuming that rockets and enemies have a specific collision radius
-      const rocketRadius = 0.05; // Adjust as needed
-      const enemyRadius = 0.3; // Adjust as needed
+        const distance = rocketBody.position.distanceTo(enemyBody.position);
+        const rocketRadius = 0.5; // Adjust as needed
+        const enemyRadius = 0.3; // Adjust as needed
 
-      if (distance < rocketRadius + enemyRadius) {
-        // Collision detected
-        enemiesKilledCount++;
-        enemiesKilled.textContent = `Enemies Killed: ${enemiesKilledCount}`;
-        // Remove the rocket
-        scene.remove(rocketMesh);
-        world.removeBody(rocketBody);
-        rockets.splice(rocketIndex, 1);
+        if (distance < rocketRadius + enemyRadius) {
+          // Collision detected
+          // Remove the rocket
+          scene.remove(rocket.mesh);
+          world.removeBody(rocketBody);
+          rockets.splice(i, 1);
 
-        // Remove the enemy
-        scene.remove(enemyMesh);
-        world.removeBody(enemyBody);
-        enemies.splice(enemyIndex, 1);
+          // Remove the enemy
+          scene.remove(enemy.mesh);
+          world.removeBody(enemyBody);
+          enemies.splice(j, 1);
+
+          // Update your kill count or any other game logic
+        }
       }
     }
   });
@@ -848,9 +872,16 @@ function animate(callback) {
   // Store the frame time in an array
   frameTimes.push(frameTime);
 
+  if (frameTimes.length > 60) {
+    frameTimes.shift();
+  }
+  updateRadar(enemies);
+
   // Calculate the average frame time over the last 60 frames
   let totalFrameTime = frameTimes.reduce((a, b) => a + b, 0);
   fpsValue = 1000 / (totalFrameTime / frameTimes.length); // Calculate FPS
   stats.update();
   renderer.render(scene, camera);
 }
+// TODO: Game pause if not active page
+// FIX: bug with rockets collision

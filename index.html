@@ -25,27 +25,39 @@
         <input
           type="range"
           id="timeScaleSlider"
-          min="0.1"
+          min="0"
           max="2.0"
           step="0.1"
           value="1.0" />
         <span id="timeScaleValue">1.0</span>
       </div>
       <button class="nightMode">Night mode</button>
-      <button class="manualRocket">set manual rocket</button>
       <input type="text" class="rocketStrength" placeholder="Rocket strenght" />
       <input type="text" class="rocketMass" placeholder="Rocket mass" />
     </div>
 
-    <div id="dot1" class="dot"></div>
-    <div id="dot2" class="dot"></div>
-    <div id="dot3" class="dot"></div>
+    <div id="radar">
+      <canvas id="radarCanvas" width="200" height="200"></canvas>
+    </div>
   </body>
 
   <style>
     * {
       margin: 0;
       padding: 0;
+    }
+
+    #radar {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background-color: rgba(0, 0, 0, 0.5);
+      border: 1px solid #fff;
+      border-radius: 50%;
+    }
+
+    #radarCanvas {
+      border-radius: 50%;
     }
 
     .dot {
