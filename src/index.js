@@ -22,7 +22,7 @@ let scene, stats, groundBody;
 let renderer;
 let isPageActive = true;
 let changeTurretType, fuelStatsUi;
-let fuelLeast = 0
+let fuelLeast = 0;
 let changeButtonType;
 let sunlight, light, hemiLight, bulbLight, radar;
 const bulletsFired = document.querySelector('.firedBullets');
@@ -99,7 +99,7 @@ ui();
 ground(scene, world);
 loadAndAddTurret(
   'turret.fbx',
-  new THREE.Vector3(3, -2, 2),
+  new THREE.Vector3(3, -2.4, 3.5),
   turretTypes.STANDARD,
   0.005,
   turrets,
@@ -107,7 +107,7 @@ loadAndAddTurret(
 );
 loadAndAddTurret(
   'turret.fbx',
-  new THREE.Vector3(-3, -2, 2),
+  new THREE.Vector3(-3, -2.4, 3.5),
   turretTypes.HOMING,
   0.005,
   turrets,
@@ -276,7 +276,7 @@ function toggleNightMode() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   // Your JavaScript code here
   radar = document.querySelector('#radar');
   // Rest of your code that uses the radar element
@@ -318,16 +318,26 @@ function ui() {
   resetChangesButton = document.querySelector('#reset-changes');
   rocketStrength = document.querySelector('.rocketStrength');
   rocketMass = document.querySelector('.rocketMass');
-  fuelStatsUi = document.querySelector('.fuelStats')
+  fuelStatsUi = document.querySelector('.fuelStats');
   const timeControl = document.querySelector('#timeScaleSlider');
   const timeValue = document.querySelector('#timeScaleValue');
+  const instructionBtn = document.querySelector('.instruction');
+  const instruction = document.querySelector('.instr');
 
   changeTurretType.innerText = `Turret type - ${currentBulletType}`;
   changeButtonType.innerText = `Turret type - ${currentBulletType}`;
-  fuelStatsUi.innerText = `Fuel least: ${fuelLeast}`
+  fuelStatsUi.innerText = `Fuel least: ${fuelLeast}`;
 
   rocketStrength.addEventListener('input', event => {
     rocketStrengthInput = event.target.value;
+  });
+
+  instructionBtn.addEventListener('click', event => {
+    if (instruction.style.display === 'none') {
+      instruction.style.display = 'block';
+    } else {
+      instruction.style.display = 'none';
+    }
   });
 
   rocketMass.addEventListener('input', event => {
@@ -354,7 +364,7 @@ function ui() {
     rocketMassInput = '';
     rocketStrengthInput = '';
     rocketMass = 100;
-    rocketStrength = 73000;
+    rocketStrength = 2000;
   });
 
   nightMode.addEventListener('click', handleMode);
@@ -378,19 +388,17 @@ function ui() {
 
 function updateRadar(enemies) {
   radarContext.clearRect(0, 0, radarCanvas.width, radarCanvas.height);
-  const centerX = radarCanvas.width / 2;
-  const centerY = radarCanvas.height / 2;
+  const centerX = radarCanvas.width / 30;
+  const centerY = radarCanvas.height / 30;
 
   // Update radar
   enemies.forEach(rocket => {
-    const x = centerX + rocket.mesh.position.x; // Adjust as needed
-    const y = centerY + rocket.mesh.position.z; // Adjust as needed
+    const x = centerX + rocket.mesh.position.x * 4; // Adjust as needed
+    const y = centerY + rocket.mesh.position.z * 4; // Adjust as needed
     radarContext.fillStyle = 'red';
-    radarContext.fillRect(x, y, 2, 2); // Display rockets as small red squares
+    radarContext.fillRect(x, y, 10, 10); // Display rockets as small red squares
   });
 }
-
-// loadAndAddTurret('villa.fbx', new THREE.Vector3(0, 0, 0), 'house', 0.005)
 
 function loadAndAddTurret(modelPath, position, type, scale) {
   const loader = new FBXLoader();
@@ -445,7 +453,7 @@ function createEnemy(position) {
     world.addBody(targetBody);
 
     // const dt = 1 / fpsValue;
-    const strength = +rocketStrengthInput * 1000 || 20000; // CAN BE CHANGED BY PLAYER
+    const strength = +rocketStrengthInput * 1000 || 4000; // CAN BE CHANGED BY PLAYER
 
     fbx.scale.set(0.005, 0.005, 0.005);
 
@@ -473,13 +481,13 @@ function createEnemy(position) {
 }
 
 function spawnEnemies() {
-  const spawnEnemyInterval = Math.random() * 3000 + 6000;
+  const spawnEnemyInterval = Math.random() * 1000 + 2000;
 
   let spawnIntervalId = setInterval(() => {
     if (isPageActive) {
       const spawnX = 45;
-      const spawnY = Math.random() * 12 - -7;
-      const enemyZ = 20;
+      const spawnY = Math.random() * 12 - -9;
+      const enemyZ = 30;
       const position = new CANNON.Vec3(spawnX, spawnY, enemyZ);
       createEnemy(position, world, scene, enemies);
     }
@@ -522,7 +530,7 @@ function ground() {
 
     fbx.scale.set(1, 5, 1); // Adjust the scale as needed
     fbx.rotation.set(0, 20.4, 0);
-    fbx.position.set(0, -2.5, 500);
+    fbx.position.set(0, -3.1, 500);
 
     // Add the ground body and mesh to the world and scene
     world.addBody(groundBody);
@@ -555,7 +563,7 @@ function createRocket(turret) {
   const fuel = 60; // liters
   let mass = 20; // kg
   if (fuel) mass += fuel;
-  fuelLeast += fuel
+  fuelLeast += fuel / 4;
 
   // Increase the initial velocity to make the rocket move faster
   const initialVelocity = new CANNON.Vec3(4, 0, 0); // Adjust the values as needed
@@ -745,7 +753,6 @@ function animate() {
     groundMesh.position.copy(new THREE.Vector3(0, 1, 0));
 
     if (checkCollisionWithGround(groundMesh.body, groundMesh)) {
-      console.log('1')
       scene.remove(groundMesh);
       world.removeBody(groundMesh.body);
       groundMesh.body.velocity.set(0, 0, 0);
@@ -763,11 +770,14 @@ function animate() {
     );
 
     const fuel = rocketFuel.get(rocketBody);
-    fuelStatsUi.innerText = `Fuel leas: ${fuelLeast}`
+    fuelStatsUi.innerText = `Fuel leas: ${fuelLeast}`;
 
-    rocketFuel.set(rocketBody, fuel - 0.3);
+    rocketFuel.set(rocketBody, fuel - 0.1);
 
     if (!directionToNearestEnemy) {
+      scene.remove(rocketMesh);
+      world.removeBody(rocketBody);
+      rockets.splice(rocketIndex, 1);
       return;
     }
 
@@ -782,7 +792,14 @@ function animate() {
       rocketBody.velocity.copy(directionToNearestEnemy);
       rocketBody.velocity.normalize();
       rocketBody.velocity.scale(rocketBody.mass, rocketBody.velocity);
+
+      // rocketBody.target = directionToNearestEnemy;
     }
+
+    // if (rocketBody.target) {
+    //   // Update rocket's rotation to look at the target enemy
+    //   rocketMesh.lookAt(rocketBody.target);
+    // }
 
     rocketMesh.position.copy(rocketBody.position);
     rocketMesh.quaternion.copy(rocketBody.quaternion);
@@ -797,8 +814,8 @@ function animate() {
         const enemyBody = enemy.body;
 
         const distance = rocketBody.position.distanceTo(enemyBody.position);
-        const rocketRadius = 0.5; // Adjust as needed
-        const enemyRadius = 0.3; // Adjust as needed
+        const rocketRadius = 1; // Adjust as needed
+        const enemyRadius = 1; // Adjust as needed
 
         if (distance < rocketRadius + enemyRadius) {
           // Collision detected
@@ -832,8 +849,8 @@ function animate() {
       const distance = bulletBody.position.distanceTo(enemyBody.position);
 
       // Assuming that bullets and enemies have a specific collision radius
-      const bulletRadius = 0.3;
-      const enemyRadius = 0.3;
+      const bulletRadius = 2;
+      const enemyRadius = 2;
 
       if (distance < bulletRadius + enemyRadius) {
         // Collision detected
@@ -866,7 +883,7 @@ function animate() {
     enemyMesh.quaternion.copy(rotationQuaternion); // Set the new rotation quaternion
   });
 
-  updateRadar(enemies)
+  updateRadar(enemies);
 
   const fixedTimeStep = 1 / 245; // Default time step
 

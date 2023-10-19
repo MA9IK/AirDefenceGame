@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
   <head>
-    <meta charset="utf-8" />
+    <meta charset="UTF-8" />
     <link rel="icon" href="PSY.png" />
     <title>Air defence game</title>
   </head>
@@ -35,6 +35,11 @@
       <button class="nightMode">Night mode</button>
       <input type="text" class="rocketStrength" placeholder="Rocket strenght" />
       <input type="text" class="rocketMass" placeholder="Rocket mass" />
+      <button class="instruction">Instruction</button>
+    </div>
+
+    <div class="instr" style="display: none">
+      <img src="instr.png" alt="instruction" />
     </div>
 
     <div id="radar">
@@ -48,9 +53,23 @@
       padding: 0;
     }
 
+    .instr {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background-color: rgba(0, 0, 0, 0.5);
+      border: 1px solid #fff;
+      border-radius: 5px;
+      padding: 5px;
+      color: #fff;
+      font-size: 12px;
+      cursor: pointer;
+      z-index: 999;
+    }
+
     #radar {
       position: absolute;
-      top: 20px;
+      bottom: 20px;
       right: 20px;
       background-color: rgba(0, 0, 0, 0.5);
       border: 1px solid #fff;
