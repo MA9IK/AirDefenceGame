@@ -866,7 +866,7 @@ function animate() {
     enemyMesh.quaternion.copy(rotationQuaternion); // Set the new rotation quaternion
   });
 
-  updateRadar()
+  updateRadar(enemies)
 
   const fixedTimeStep = 1 / 245; // Default time step
 
