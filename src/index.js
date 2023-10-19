@@ -13,6 +13,7 @@ const parameters = {
 import { Sky } from 'three/addons/objects/Sky.js';
 import { Water } from 'three/addons/objects/Water.js';
 import Stats from 'three/addons/libs/stats.module.js';
+import { update } from 'tween.js';
 
 const mouse = new THREE.Vector2();
 
@@ -20,9 +21,10 @@ let camera;
 let scene, stats, groundBody;
 let renderer;
 let isPageActive = true;
-let changeTurretType;
+let changeTurretType, fuelStatsUi;
+let fuelLeast = 0
 let changeButtonType;
-let sunlight, light, hemiLight, bulbLight;
+let sunlight, light, hemiLight, bulbLight, radar;
 const bulletsFired = document.querySelector('.firedBullets');
 const rocketLaunched = document.querySelector('.rocketsLaunched');
 const enemiesKilled = document.querySelector('.enemiesKilled');
@@ -274,6 +276,12 @@ function toggleNightMode() {
   }
 }
 
+document.addEventListener('DOMContentLoaded', function() {
+  // Your JavaScript code here
+  radar = document.querySelector('#radar');
+  // Rest of your code that uses the radar element
+});
+
 function ui() {
   const gui = new dat.GUI();
 
@@ -310,11 +318,13 @@ function ui() {
   resetChangesButton = document.querySelector('#reset-changes');
   rocketStrength = document.querySelector('.rocketStrength');
   rocketMass = document.querySelector('.rocketMass');
+  fuelStatsUi = document.querySelector('.fuelStats')
   const timeControl = document.querySelector('#timeScaleSlider');
   const timeValue = document.querySelector('#timeScaleValue');
 
   changeTurretType.innerText = `Turret type - ${currentBulletType}`;
   changeButtonType.innerText = `Turret type - ${currentBulletType}`;
+  fuelStatsUi.innerText = `Fuel least: ${fuelLeast}`
 
   rocketStrength.addEventListener('input', event => {
     rocketStrengthInput = event.target.value;
@@ -435,7 +445,7 @@ function createEnemy(position) {
     world.addBody(targetBody);
 
     // const dt = 1 / fpsValue;
-    const strength = +rocketStrengthInput || 5000; // CAN BE CHANGED BY PLAYER
+    const strength = +rocketStrengthInput * 1000 || 20000; // CAN BE CHANGED BY PLAYER
 
     fbx.scale.set(0.005, 0.005, 0.005);
 
@@ -545,6 +555,7 @@ function createRocket(turret) {
   const fuel = 60; // liters
   let mass = 20; // kg
   if (fuel) mass += fuel;
+  fuelLeast += fuel
 
   // Increase the initial velocity to make the rocket move faster
   const initialVelocity = new CANNON.Vec3(4, 0, 0); // Adjust the values as needed
@@ -685,7 +696,6 @@ function checkCollisionWithGround(objectBody, groundMesh) {
   return false; // No collision
 }
 
-// updateTimeScale(0.1);
 function animate() {
   if (document.visibilityState === 'hidden') {
     return;
@@ -732,9 +742,10 @@ function animate() {
   });
 
   groundMeshes.forEach(groundMesh => {
-    groundMesh.position.copy(new THREE.Vector3(0, 0, 0));
+    groundMesh.position.copy(new THREE.Vector3(0, 1, 0));
 
     if (checkCollisionWithGround(groundMesh.body, groundMesh)) {
+      console.log('1')
       scene.remove(groundMesh);
       world.removeBody(groundMesh.body);
       groundMesh.body.velocity.set(0, 0, 0);
@@ -752,6 +763,7 @@ function animate() {
     );
 
     const fuel = rocketFuel.get(rocketBody);
+    fuelStatsUi.innerText = `Fuel leas: ${fuelLeast}`
 
     rocketFuel.set(rocketBody, fuel - 0.3);
 
@@ -854,6 +866,8 @@ function animate() {
     enemyMesh.quaternion.copy(rotationQuaternion); // Set the new rotation quaternion
   });
 
+  updateRadar()
+
   const fixedTimeStep = 1 / 245; // Default time step
 
   const timeStep = fixedTimeStep * timeScale; // Apply the time scale
@@ -875,7 +889,6 @@ function animate() {
   if (frameTimes.length > 60) {
     frameTimes.shift();
   }
-  updateRadar(enemies);
 
   // Calculate the average frame time over the last 60 frames
   let totalFrameTime = frameTimes.reduce((a, b) => a + b, 0);
@@ -883,5 +896,3 @@ function animate() {
   stats.update();
   renderer.render(scene, camera);
 }
-// TODO: Game pause if not active page
-// FIX: bug with rockets collision
